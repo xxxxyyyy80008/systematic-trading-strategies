@@ -1,19 +1,26 @@
 """
-Walk-Forward Analysis with Optuna Optimization
+Walk-Forward Analysis with Optuna Optimization (Fixed Version)
 """
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple, Optional, Callable
+from typing import Dict, List, Tuple, Optional, Callable, Any, Union
 from datetime import datetime, timedelta
 import optuna
 from optuna.samplers import TPESampler
 import warnings
 import random
+from scipy import stats  # Added missing import
+
 warnings.filterwarnings('ignore')
 
-from .backtest_engine import BacktestEngine
-from .types_core import StrategyConfig, TradeConfig
+# Assumed internal modules (mock placeholders for context if running standalone)
+try:
+    from .backtest_engine import BacktestEngine
+    from .types_core import StrategyConfig, TradeConfig
+except ImportError:
+    # These would normally exist in the user's environment
+    pass 
 
 
 # ============================================================================
@@ -53,8 +60,16 @@ def filter_data_by_date(data_dict: Dict[str, pd.DataFrame],
                         start_date: datetime,
                         end_date: datetime) -> Dict[str, pd.DataFrame]:
     filtered = {}
+    # FIX: Ensure comparison consistency using pd.Timestamp
+    ts_start = pd.Timestamp(start_date)
+    ts_end = pd.Timestamp(end_date)
+    
     for ticker, df in data_dict.items():
-        mask = (df.index >= start_date) & (df.index <= end_date)
+        if df.empty:
+            continue
+            
+        # Ensure index consistency
+        mask = (df.index >= ts_start) & (df.index <= ts_end)
         filtered_df = df[mask].copy()
         if not filtered_df.empty:
             filtered[ticker] = filtered_df
@@ -64,7 +79,13 @@ def filter_data_by_date(data_dict: Dict[str, pd.DataFrame],
 def get_date_range(data_dict: Dict[str, pd.DataFrame]) -> Tuple[datetime, datetime]:
     all_dates = set()
     for df in data_dict.values():
-        all_dates.update(df.index)
+        if not df.empty:
+            all_dates.update(df.index)
+            
+    if not all_dates:
+        # Fallback if data is empty
+        return datetime.now(), datetime.now()
+        
     dates = sorted(all_dates)
     return dates[0], dates[-1]
 
@@ -134,33 +155,19 @@ def extract_closed_trades(trades_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calculate_trade_metrics(trades_df: pd.DataFrame) -> Dict:
+    empty_metrics = {
+        'total_trades': 0, 'winning_trades': 0, 'losing_trades': 0,
+        'win_rate': 0.0, 'avg_win': 0.0, 'avg_loss': 0.0,
+        'profit_factor': 0.0, 'expectancy': 0.0, 'total_pnl': 0.0
+    }
+
     if trades_df is None or trades_df.empty:
-        return {
-            'total_trades': 0,
-            'winning_trades': 0,
-            'losing_trades': 0,
-            'win_rate': 0.0,
-            'avg_win': 0.0,
-            'avg_loss': 0.0,
-            'profit_factor': 0.0,
-            'expectancy': 0.0,
-            'total_pnl': 0.0
-        }
+        return empty_metrics
     
     closed_trades = extract_closed_trades(trades_df)
     
     if closed_trades.empty:
-        return {
-            'total_trades': 0,
-            'winning_trades': 0,
-            'losing_trades': 0,
-            'win_rate': 0.0,
-            'avg_win': 0.0,
-            'avg_loss': 0.0,
-            'profit_factor': 0.0,
-            'expectancy': 0.0,
-            'total_pnl': 0.0
-        }
+        return empty_metrics
     
     pnl_col = None
     for col in ['net_pnl', 'pnl', 'profit', 'return', 'profit_loss']:
@@ -169,32 +176,12 @@ def calculate_trade_metrics(trades_df: pd.DataFrame) -> Dict:
             break
     
     if pnl_col is None:
-        return {
-            'total_trades': len(closed_trades),
-            'winning_trades': 0,
-            'losing_trades': 0,
-            'win_rate': 0.0,
-            'avg_win': 0.0,
-            'avg_loss': 0.0,
-            'profit_factor': 0.0,
-            'expectancy': 0.0,
-            'total_pnl': 0.0
-        }
+        return {**empty_metrics, 'total_trades': len(closed_trades)}
     
     pnl_values = closed_trades[pnl_col].replace([np.inf, -np.inf], np.nan).dropna()
     
     if pnl_values.empty:
-        return {
-            'total_trades': len(closed_trades),
-            'winning_trades': 0,
-            'losing_trades': 0,
-            'win_rate': 0.0,
-            'avg_win': 0.0,
-            'avg_loss': 0.0,
-            'profit_factor': 0.0,
-            'expectancy': 0.0,
-            'total_pnl': 0.0
-        }
+        return {**empty_metrics, 'total_trades': len(closed_trades)}
     
     total_trades = len(pnl_values)
     winning_trades = len(pnl_values[pnl_values > 0])
@@ -228,50 +215,32 @@ def calculate_trade_metrics(trades_df: pd.DataFrame) -> Dict:
 
 
 def calculate_returns_metrics(daily_values: pd.DataFrame, initial_capital: float) -> Dict:
+    empty_metrics = {
+        'total_return': 0.0, 'sharpe_ratio': 0.0, 'sortino_ratio': 0.0,
+        'max_drawdown': 0.0, 'calmar_ratio': 0.0
+    }
+
     if daily_values is None or daily_values.empty:
-        return {
-            'total_return': 0.0,
-            'sharpe_ratio': 0.0,
-            'sortino_ratio': 0.0,
-            'max_drawdown': 0.0,
-            'calmar_ratio': 0.0
-        }
+        return empty_metrics
     
     if 'total_value' not in daily_values.columns:
-        return {
-            'total_return': 0.0,
-            'sharpe_ratio': 0.0,
-            'sortino_ratio': 0.0,
-            'max_drawdown': 0.0,
-            'calmar_ratio': 0.0
-        }
+        return empty_metrics
     
     values = daily_values['total_value'].replace([np.inf, -np.inf], np.nan).dropna().values
     
     if len(values) < 2:
-        return {
-            'total_return': 0.0,
-            'sharpe_ratio': 0.0,
-            'sortino_ratio': 0.0,
-            'max_drawdown': 0.0,
-            'calmar_ratio': 0.0
-        }
+        return empty_metrics
     
-    # FIX: Safe division to handle cases where portfolio value is 0
+    # Safe division to handle cases where portfolio value is 0
     denom = values[:-1]
     with np.errstate(divide='ignore', invalid='ignore'):
         returns = np.diff(values) / denom
         # Remove NaNs and Infs resulting from division by zero
         returns = returns[np.isfinite(returns)]
     
+    # FIX: Handle case where all returns were filtered out (e.g., all infinite)
     if len(returns) == 0:
-        return {
-            'total_return': 0.0,
-            'sharpe_ratio': 0.0,
-            'sortino_ratio': 0.0,
-            'max_drawdown': 0.0,
-            'calmar_ratio': 0.0
-        }
+        return empty_metrics
     
     total_return = ((values[-1] - initial_capital) / initial_capital) * 100
     
@@ -306,7 +275,6 @@ def calculate_returns_metrics(daily_values: pd.DataFrame, initial_capital: float
     }
 
 
-
 # ============================================================================
 # BACKTEST EXECUTION
 # ============================================================================
@@ -316,6 +284,18 @@ def run_backtest(data_dict: Dict[str, pd.DataFrame],
                 strategy_class: type,
                 strategy_name: str,
                 trade_config: TradeConfig) -> Dict:
+    
+    # Fail fast if no data
+    if not data_dict:
+         return {
+            'total_trades': 0, 'winning_trades': 0, 'losing_trades': 0,
+            'win_rate': 0.0, 'avg_win': 0.0, 'avg_loss': 0.0,
+            'profit_factor': 0.0, 'expectancy': 0.0, 'total_pnl': 0.0,
+            'total_return': 0.0, 'sharpe_ratio': 0.0, 'sortino_ratio': 0.0,
+            'max_drawdown': 0.0, 'calmar_ratio': 0.0,
+            'error': "No data provided to backtest"
+        }
+
     try:
         strategy_config = StrategyConfig(name=strategy_name, parameters=params)
         strategy = strategy_class(strategy_config)
@@ -329,20 +309,11 @@ def run_backtest(data_dict: Dict[str, pd.DataFrame],
         
     except Exception as e:
         return {
-            'total_trades': 0,
-            'winning_trades': 0,
-            'losing_trades': 0,
-            'win_rate': 0.0,
-            'avg_win': 0.0,
-            'avg_loss': 0.0,
-            'profit_factor': 0.0,
-            'expectancy': 0.0,
-            'total_pnl': 0.0,
-            'total_return': 0.0,
-            'sharpe_ratio': 0.0,
-            'sortino_ratio': 0.0,
-            'max_drawdown': 0.0,
-            'calmar_ratio': 0.0,
+            'total_trades': 0, 'winning_trades': 0, 'losing_trades': 0,
+            'win_rate': 0.0, 'avg_win': 0.0, 'avg_loss': 0.0,
+            'profit_factor': 0.0, 'expectancy': 0.0, 'total_pnl': 0.0,
+            'total_return': 0.0, 'sharpe_ratio': 0.0, 'sortino_ratio': 0.0,
+            'max_drawdown': 0.0, 'calmar_ratio': 0.0,
             'error': str(e)
         }
 
@@ -451,6 +422,10 @@ def create_objective_function(data_dict: Dict[str, pd.DataFrame],
                              objective_weights: Tuple[float, float]) -> Callable:
     
     def objective(trial: optuna.Trial) -> float:
+        # FIX: Fail fast if no data is available for this window
+        if not data_dict:
+            return -999.0
+
         params = {}
         for param_name, (param_type, *args) in param_space.items():
             if param_type == 'int':
@@ -556,7 +531,7 @@ def process_window(window: Dict,
     if verbose:
         print(f"\nOptimizing parameters...")
     
-    # 2. Run Optimization (Expensive Step)
+    # 2. Run Optimization
     best_params, study = optimize_parameters(
         train_data, param_space, strategy_class, strategy_name,
         trade_config, wf_config, window_idx, objective_weights
@@ -624,7 +599,6 @@ def process_window(window: Dict,
     result.update({f'test_{k}': v for k, v in test_results.items() if k != 'error'})
     result.update({f'holdout_{k}': v for k, v in holdout_results.items() if k != 'error'})
     
-    # Return both the result dict AND the study object
     return result, study
 
 # ============================================================================
@@ -665,7 +639,6 @@ def walk_forward_analysis(data_dict: Dict[str, pd.DataFrame],
     studies = []
     
     for i, window in enumerate(windows, 1):
-        # FIX: Unpack tuple (result, study) from the updated process_window
         result, study = process_window(
             window, i, data_dict, param_space,
             strategy_class, strategy_name, trade_config,
@@ -674,8 +647,6 @@ def walk_forward_analysis(data_dict: Dict[str, pd.DataFrame],
         
         if result:
             results.append(result)
-            # FIX: Append the returned study directly. 
-            # Do NOT call optimize_parameters here again.
             if study:
                 studies.append(study)
     
@@ -696,6 +667,11 @@ def calculate_param_importance(studies: List[optuna.Study]) -> pd.DataFrame:
     
     for idx, study in enumerate(studies, 1):
         try:
+            # Check if study has completed trials to avoid error
+            valid_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+            if not valid_trials:
+                continue
+                
             importance = optuna.importance.get_param_importances(study)
             for param, score in importance.items():
                 sensitivity_results.append({
@@ -739,11 +715,11 @@ def get_param_distributions(studies: List[optuna.Study], top_n: int = 5) -> Dict
         
         if values:
             distributions[param] = {
-                'mean': np.mean(values),
-                'std': np.std(values),
+                'mean': np.mean(values) if pd.api.types.is_numeric_dtype(values) else np.nan,
+                'std': np.std(values) if pd.api.types.is_numeric_dtype(values) else np.nan,
                 'min': np.min(values),
                 'max': np.max(values),
-                'median': np.median(values)
+                'median': np.median(values) if pd.api.types.is_numeric_dtype(values) else np.nan
             }
     
     return distributions
@@ -759,7 +735,7 @@ def analyze_param_stability(results_df: pd.DataFrame, param_name: str) -> Dict:
     if values.empty:
         return {}
     
-    # FIX: Check if the column contains numeric data
+    # FIX: Robust check for categorical parameters
     if not pd.api.types.is_numeric_dtype(values):
         # Return simplified info for categorical/string parameters
         return {
@@ -767,8 +743,8 @@ def analyze_param_stability(results_df: pd.DataFrame, param_name: str) -> Dict:
             'mean': np.nan,
             'median': np.nan,
             'std': np.nan,
-            'min': np.nan,
-            'max': np.nan,
+            'min': values.min() if not values.empty else np.nan,
+            'max': values.max() if not values.empty else np.nan,
             'cv': np.nan,
             'trend_slope': 0.0,
             'trend_r2': 0.0,
@@ -780,9 +756,12 @@ def analyze_param_stability(results_df: pd.DataFrame, param_name: str) -> Dict:
     cv = (std_val / mean_val) if mean_val != 0 else 0.0
     
     # Perform linear regression only on numeric data
-    from scipy import stats
     x = np.arange(len(values))
-    slope, intercept, r_value, p_value, std_err = stats.linregress(x, values)
+    try:
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x, values)
+        trend_r2 = r_value**2
+    except Exception:
+        slope, trend_r2 = 0.0, 0.0
     
     return {
         'parameter': param_name,
@@ -793,7 +772,7 @@ def analyze_param_stability(results_df: pd.DataFrame, param_name: str) -> Dict:
         'max': values.max(),
         'cv': cv,
         'trend_slope': slope,
-        'trend_r2': r_value**2,
+        'trend_r2': trend_r2,
         'is_stable': cv < 0.3
     }
 
