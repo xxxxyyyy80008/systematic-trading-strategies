@@ -49,13 +49,13 @@ def plot_ama_kama_signals(data: pd.DataFrame,
     ama_period = strategy_params.get('ama_period', 10)
     ama_fast = strategy_params.get('ama_fast', 2)
     ama_slow = strategy_params.get('ama_slow', 30)
-    ema_period = strategy_params.get('ema_period', 20)
+    kama_period = strategy_params.get('kama_period', 20)
     rsi_period = strategy_params.get('rsi_period', 14)
     rsi_entry_max = strategy_params.get('rsi_entry_max', 35)
     rsi_exit_min = strategy_params.get('rsi_exit_min', 65)
     
     # Check required columns
-    required_cols = ['Close', 'AMA', 'EMA', 'RSI']
+    required_cols = ['Close', 'AMA', 'KAMA', 'RSI']
     missing_cols = [col for col in required_cols if col not in ticker_data.columns]
     if missing_cols:
         print(f"  Warning: Missing columns: {missing_cols}")
@@ -74,7 +74,7 @@ def plot_ama_kama_signals(data: pd.DataFrame,
     ama_period = strategy_params.get('ama_period', 10)
     ama_fast = strategy_params.get('ama_fast', 2)
     ama_slow = strategy_params.get('ama_slow', 30)
-    ema_period = strategy_params.get('ema_period', 20)
+    kama_period = strategy_params.get('kama_period', 20)
     rsi_entry_max = strategy_params.get('rsi_entry_max', 35)
     rsi_exit_min = strategy_params.get('rsi_exit_min', 65)
     
@@ -82,7 +82,7 @@ def plot_ama_kama_signals(data: pd.DataFrame,
     fig, axes = plt.subplots(4, 1, figsize=(16, 14), 
                              gridspec_kw={'height_ratios': [3, 2, 2, 2]})
     
-    # 1. Price with AMA and EMA
+    # 1. Price with AMA and KAMA
     ax1 = axes[0]
     
     # Plot price
@@ -95,17 +95,17 @@ def plot_ama_kama_signals(data: pd.DataFrame,
                 label=f'AMA({ama_period},{ama_fast},{ama_slow})', 
                 linewidth=2.0, color='blue', alpha=0.7)
     
-    # Plot EMA
-    if 'EMA' in ticker_data.columns:
-        ax1.plot(ticker_data.index, ticker_data['EMA'], 
-                label=f'EMA({ema_period})', 
+    # Plot KAMA
+    if 'KAMA' in ticker_data.columns:
+        ax1.plot(ticker_data.index, ticker_data['KAMA'], 
+                label=f'KAMA({kama_period})', 
                 linewidth=2.0, color='red', alpha=0.7)
     
-    # Mark entry conditions (AMA > EMA, RSI < entry_max)
-    if all(col in ticker_data.columns for col in ['AMA', 'EMA', 'RSI']):
+    # Mark entry conditions (AMA > KAMA, RSI < entry_max)
+    if all(col in ticker_data.columns for col in ['AMA', 'KAMA', 'RSI']):
         entry_conditions = (
-            (ticker_data['AMA'] > ticker_data['EMA']) &
-            (ticker_data['AMA'].shift(1) <= ticker_data['EMA'].shift(1)) &
+            (ticker_data['AMA'] > ticker_data['KAMA']) &
+            (ticker_data['AMA'].shift(1) <= ticker_data['KAMA'].shift(1)) &
             (ticker_data['RSI'] < rsi_entry_max)
         )
         entry_dates = ticker_data[entry_conditions].index
@@ -116,11 +116,11 @@ def plot_ama_kama_signals(data: pd.DataFrame,
                        edgecolors='darkgreen', linewidth=1.5,
                        label='Entry Signal', zorder=5, alpha=0.7)
     
-    # Mark exit conditions (AMA < EMA, RSI > exit_min)
-    if all(col in ticker_data.columns for col in ['AMA', 'EMA', 'RSI']):
+    # Mark exit conditions (AMA < KAMA, RSI > exit_min)
+    if all(col in ticker_data.columns for col in ['AMA', 'KAMA', 'RSI']):
         exit_conditions = (
-            (ticker_data['AMA'] < ticker_data['EMA']) &
-            (ticker_data['AMA'].shift(1) >= ticker_data['EMA'].shift(1)) &
+            (ticker_data['AMA'] < ticker_data['KAMA']) &
+            (ticker_data['AMA'].shift(1) >= ticker_data['KAMA'].shift(1)) &
             (ticker_data['RSI'] > rsi_exit_min)
         )
         exit_dates = ticker_data[exit_conditions].index
@@ -132,39 +132,39 @@ def plot_ama_kama_signals(data: pd.DataFrame,
                        label='Exit Signal', zorder=5, alpha=0.7)
     
     # Highlight bullish/bearish regions
-    if all(col in ticker_data.columns for col in ['AMA', 'EMA']):
-        ama_above = ticker_data['AMA'] > ticker_data['EMA']
+    if all(col in ticker_data.columns for col in ['AMA', 'KAMA']):
+        ama_above = ticker_data['AMA'] > ticker_data['KAMA']
         ax1.fill_between(ticker_data.index, 
                         ticker_data['Close'].min(), 
                         ticker_data['Close'].max(),
                         where=ama_above, alpha=0.05, color='green',
-                        label='Bullish Zone (AMA > EMA)')
+                        label='Bullish Zone (AMA > KAMA)')
     
     ax1.set_title(f'{ticker} - AMA-KAMA Strategy', fontsize=14, fontweight='bold')
     ax1.set_ylabel('Price ($)', fontsize=11)
     ax1.legend(loc='best', fontsize=9)
     ax1.grid(alpha=0.3)
     
-    # 2. AMA-EMA Distance
+    # 2. AMA-KAMA Distance
     ax2 = axes[1]
     
-    if all(col in ticker_data.columns for col in ['AMA', 'EMA']):
+    if all(col in ticker_data.columns for col in ['AMA', 'KAMA']):
         # Calculate distance
-        distance = ((ticker_data['AMA'] - ticker_data['EMA']) / ticker_data['EMA'] * 100)
+        distance = ((ticker_data['AMA'] - ticker_data['KAMA']) / ticker_data['KAMA'] * 100)
         
         ax2.plot(ticker_data.index, distance, 
-                label='AMA - EMA Distance (%)', linewidth=1.5, color='purple')
+                label='AMA - KAMA Distance (%)', linewidth=1.5, color='purple')
         ax2.axhline(y=0, color='black', linestyle='-', alpha=0.5)
         
         # Fill positive/negative regions
         ax2.fill_between(ticker_data.index, 0, distance, 
                          where=(distance >= 0), 
-                         alpha=0.3, color='green', label='AMA > EMA')
+                         alpha=0.3, color='green', label='AMA > KAMA')
         ax2.fill_between(ticker_data.index, 0, distance, 
                          where=(distance < 0), 
-                         alpha=0.3, color='red', label='EMA > AMA')
+                         alpha=0.3, color='red', label='KAMA > AMA')
     
-    ax2.set_title('AMA-EMA Distance', fontsize=12, fontweight='bold')
+    ax2.set_title('AMA-KAMA Distance', fontsize=12, fontweight='bold')
     ax2.set_ylabel('Distance (%)', fontsize=10)
     ax2.legend(loc='best', fontsize=9)
     ax2.grid(alpha=0.3)
