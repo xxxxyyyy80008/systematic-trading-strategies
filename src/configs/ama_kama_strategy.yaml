@@ -16,8 +16,6 @@ parameters:
   kama_slow: 30
   kama_period: 20
   
-  # EMA Parameters (crossover reference)
-  ema_period: 20
   
   # RSI Filter Parameters
   rsi_period: 14

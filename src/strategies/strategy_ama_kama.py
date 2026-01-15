@@ -37,10 +37,7 @@ class AMAKAMAStrategy(Strategy):
         self.kama_fast = self.params.get('kama_fast', 2)
         self.kama_slow = self.params.get('kama_slow', 30)
         self.kama_period = self.params.get('kama_period', 20)
-        
-        # EMA Parameters
-        self.ema_period = self.params.get('ema_period', 20)
-        
+                
         # RSI Parameters
         self.rsi_period = self.params.get('rsi_period', 14)
         self.rsi_entry_max = self.params.get('rsi_entry_max', 35)
@@ -70,8 +67,6 @@ class AMAKAMAStrategy(Strategy):
             period=self.kama_period
         )
         
-        # Add EMA
-        result['EMA'] = ema(result['Close'], self.ema_period)
         
         # Add RSI
         result['RSI'] = rsi(result['Close'], self.rsi_period)
@@ -93,8 +88,8 @@ class AMAKAMAStrategy(Strategy):
         """
         Generate AMA-KAMA signals .
         
-        Entry: AMA crosses above EMA + RSI < 35
-        Exit: AMA crosses below EMA + RSI > 65
+        Entry: AMA crosses above KAMA + RSI < 35
+        Exit: AMA crosses below KAMA + RSI > 65
         """
         signals = []
         
@@ -130,8 +125,8 @@ class AMAKAMAStrategy(Strategy):
     
     def _detect_entry(self, data: pd.DataFrame) -> pd.Series:
         """Detect entry conditions (pure helper)."""
-        # AMA crosses above EMA
-        ama_cross_above = detect_crossover_above(data, 'AMA', 'EMA')
+        # AMA crosses above KAMA
+        ama_cross_above = detect_crossover_above(data, 'AMA', 'KAMA')
         
         # RSI oversold
         # rsi_oversold = data['RSI'] < self.rsi_entry_max
@@ -141,13 +136,13 @@ class AMAKAMAStrategy(Strategy):
     
     def _detect_exit(self, data: pd.DataFrame) -> pd.Series:
         """Detect exit conditions (pure helper)."""
-        # AMA crosses below EMA
-        ama_cross_below = detect_crossover_below(data, 'AMA', 'EMA')
+        # AMA crosses below KAMA
+        ama_cross_below = detect_crossover_below(data, 'AMA', 'KAMA')
         
         # RSI overbought
         rsi_overbought = data['RSI'] > self.rsi_exit_min
         
-        return ama_cross_below & rsi_overbought
+        return ama_cross_below | rsi_overbought
     
     def validate_config(self) -> bool:
         """Validate configuration."""
