@@ -1,4 +1,3 @@
-"""Data downloading and preprocessing."""
 from typing import Dict, List, Optional, Set
 import pandas as pd
 import yfinance as yf
@@ -6,17 +5,6 @@ import yfinance as yf
 
 def download_ticker(ticker: str, start_date: str, 
                    end_date: Optional[str] = None) -> Optional[pd.DataFrame]:
-    """
-    Download data for single ticker
-    
-    Args:
-        ticker: Ticker symbol
-        start_date: Start date (YYYY-MM-DD)
-        end_date: End date (optional)
-        
-    Returns:
-        DataFrame or None
-    """
     try:
         data = yf.Ticker(ticker)
         hist = data.history(period="max", start=start_date, end=end_date)
@@ -24,7 +12,6 @@ def download_ticker(ticker: str, start_date: str,
         if hist.empty:
             return None
         
-        # Handle multi-level columns from newer yfinance
         if isinstance(hist.columns, pd.MultiIndex):
             hist = hist.droplevel(1, axis=1)
         
@@ -32,7 +19,6 @@ def download_ticker(ticker: str, start_date: str,
         if not all(col in hist.columns for col in required):
             return None
         
-        # Normalize timezone
         if hasattr(hist.index, 'tz') and hist.index.tz is not None:
             hist.index = hist.index.tz_convert("America/New_York")
             hist.index = pd.to_datetime(hist.index.date)
@@ -46,7 +32,6 @@ def download_ticker(ticker: str, start_date: str,
 
 def download_multiple(tickers: List[str], start_date: str,
                      end_date: Optional[str] = None) -> Dict[str, pd.DataFrame]:
-    """Download data for multiple tickers."""
     results = {}
     print(f"\nDownloading data for {len(tickers)} tickers...")
     
@@ -65,7 +50,6 @@ def download_multiple(tickers: List[str], start_date: str,
 
 
 def find_common_dates(dataframes: List[pd.DataFrame]) -> Set:
-    """Find common dates across DataFrames ."""
     if not dataframes:
         return set()
     
@@ -74,11 +58,6 @@ def find_common_dates(dataframes: List[pd.DataFrame]) -> Set:
 
 
 def align_data(data_dict: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
-    """
-    Align all DataFrames to common dates .
-    
-    Returns new dict with aligned data.
-    """
     if not data_dict:
         return {}
     
@@ -94,7 +73,6 @@ def align_data(data_dict: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
 
 
 def validate_ohlcv(df: pd.DataFrame) -> bool:
-    """Validate OHLCV data ."""
     required = ['Open', 'High', 'Low', 'Close', 'Volume']
     
     if not all(col in df.columns for col in required):
