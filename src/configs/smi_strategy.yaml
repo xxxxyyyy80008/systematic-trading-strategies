@@ -1,0 +1,33 @@
+# SMI Strategy Configuration
+name: "SMI"
+description: "SMI strategy"
+
+parameters:
+  # SMI Parameters
+  k_period: 40
+  d_period: 3
+  oversold_threshold: -50
+  overbought_threshold: 50
+  
+
+# Tickers to trade
+tickers:
+  - "SPY"
+  - "QQQ"
+  - "IWM"
+  - "DIA"
+  - "AAPL"
+  - "MSFT"
+  - "GOOGL"
+  - "AMZN"
+  - "NVDA"
+  - "META"
+  - "TSLA"
+  - "AMD"
+
+# Trading Configuration
+trade_config:
+  initial_capital: 100000
+  position_size: 0.1        # 10% of capital per position
+  max_positions: 5
+  commission: 0.001         # 0.1% commission

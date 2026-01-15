@@ -48,7 +48,7 @@ def bollinger_bands(price: pd.Series,
                    period: int = 20, 
                    std_dev: float = 2.0) -> Dict[str, pd.Series]:
     """
-    Calculate Bollinger Bands 
+    Calculate Bollinger Bands - pure function (ENHANCED).
     
     Bollinger Bands consist of a middle band (SMA) and upper/lower bands
     that are standard deviations away from the middle band.
@@ -108,7 +108,7 @@ def rsi(prices: pd.Series, period: int = 14) -> pd.Series:
 def macd(prices: pd.Series, fast: int = 12, slow: int = 26, 
         signal: int = 9) -> Dict[str, pd.Series]:
     """
-    MACD indicator .
+    MACD indicator (pure function).
     
     Returns dict with 'macd', 'signal', 'histogram' keys.
     """
@@ -127,22 +127,22 @@ def macd(prices: pd.Series, fast: int = 12, slow: int = 26,
 
 
 def momentum(prices: pd.Series, period: int = 10) -> pd.Series:
-    """Momentum indicator ."""
+    """Momentum indicator (pure function)."""
     return prices - prices.shift(period)
 
 
 def roc(prices: pd.Series, period: int = 10) -> pd.Series:
-    """Rate of Change ."""
+    """Rate of Change (pure function)."""
     return ((prices - prices.shift(period)) / prices.shift(period)) * 100
 
 def stddev(prices: pd.Series, period: int) -> pd.Series:
-    """Standard Deviation ."""
+    """Standard Deviation (pure function)."""
     return prices.rolling(window=period, min_periods=period).std()
 
 def mabw(prices: pd.Series, fast_period: int = 10, slow_period: int = 50,
         multiplier: float = 1.0) -> Dict[str, pd.Series]:
     """
-    Moving Average Band Width indicator .
+    Moving Average Band Width indicator (pure function).
     
     Args:
         prices: Price series
@@ -180,7 +180,7 @@ def mabw(prices: pd.Series, fast_period: int = 10, slow_period: int = 50,
 
 def typical_price(df: pd.DataFrame) -> pd.Series:
     """
-    Typical Price (HLC/3) .
+    Typical Price (HLC/3) (pure function).
     
     Args:
         df: DataFrame with 'High', 'Low', 'Close' columns
@@ -243,7 +243,7 @@ def vpn(df: pd.DataFrame, period: int = 30, smooth: int = 3,
 
 def obv(df: pd.DataFrame) -> pd.Series:
     """
-    On-Balance Volume .
+    On-Balance Volume (pure function).
     
     Args:
         df: DataFrame with 'Close' and 'Volume' columns
@@ -255,7 +255,7 @@ def obv(df: pd.DataFrame) -> pd.Series:
 
 def vwap(df: pd.DataFrame) -> pd.Series:
     """
-    Volume Weighted Average Price .
+    Volume Weighted Average Price (pure function).
     
     Args:
         df: DataFrame with OHLCV data
@@ -267,7 +267,7 @@ def vwap(df: pd.DataFrame) -> pd.Series:
 
 def adx(df: pd.DataFrame, period: int = 14) -> Dict[str, pd.Series]:
     """
-    Average Directional Index .
+    Average Directional Index (pure function).
     
     Returns dict with 'adx', 'plus_di', 'minus_di' keys.
     """
@@ -307,7 +307,7 @@ def adx(df: pd.DataFrame, period: int = 14) -> Dict[str, pd.Series]:
 
 def pivot_points(df: pd.DataFrame) -> Dict[str, pd.Series]:
     """
-    Standard Pivot Points .
+    Standard Pivot Points (pure function).
     
     Returns dict with 'pivot', 'r1', 'r2', 'r3', 's1', 's2', 's3' keys.
     """
@@ -337,7 +337,7 @@ def pivot_points(df: pd.DataFrame) -> Dict[str, pd.Series]:
 
 def add_indicators_to_df(df: pd.DataFrame, indicators_config: Dict) -> pd.DataFrame:
     """
-    Add multiple indicators to DataFrame .
+    Add multiple indicators to DataFrame (pure function).
     
     Args:
         df: OHLCV DataFrame
@@ -545,7 +545,7 @@ def kama(price: pd.Series,
 
 def rolling_window(series: pd.Series, window: int) -> List[pd.Series]:
     """
-    Create rolling windows .
+    Create rolling windows (pure function).
     
     Returns list of Series, each of length 'window'.
     """
@@ -554,7 +554,7 @@ def rolling_window(series: pd.Series, window: int) -> List[pd.Series]:
 
 def normalize(series: pd.Series, method: str = 'zscore') -> pd.Series:
     """
-    Normalize series .
+    Normalize series (pure function).
     
     Methods: 'zscore', 'minmax', 'percentrank'
     """
@@ -575,7 +575,7 @@ def normalize(series: pd.Series, method: str = 'zscore') -> pd.Series:
 
 def bullish_engulfing(open_price: pd.Series, close_price: pd.Series) -> pd.Series:
     """
-    Detect Bullish Engulfing candlestick pattern
+    Detect Bullish Engulfing candlestick pattern - pure function.
     
     Pattern Requirements:
     1. Previous candle is bearish (close < open)
@@ -625,7 +625,7 @@ def bullish_engulfing(open_price: pd.Series, close_price: pd.Series) -> pd.Serie
 
 def bearish_engulfing(open_price: pd.Series, close_price: pd.Series) -> pd.Series:
     """
-    Detect Bearish Engulfing candlestick pattern 
+    Detect Bearish Engulfing candlestick pattern - pure function.
     
     Pattern Requirements:
     1. Previous candle is bullish (close > open)
@@ -673,7 +673,7 @@ def hammer(open_price: pd.Series,
            low_price: pd.Series, 
            close_price: pd.Series) -> pd.Series:
     """
-    Detect Hammer candlestick pattern
+    Detect Hammer candlestick pattern - pure function.
     
     Pattern Requirements:
     1. Small real body at the upper end of range
@@ -712,7 +712,7 @@ def hammer(open_price: pd.Series,
 
 def bbands_squeeze(bb_width: pd.Series, period: int = 125) -> pd.Series:
     """
-    Detect Bollinger Bands squeeze
+    Detect Bollinger Bands squeeze - pure function.
     
     Squeeze occurs when band width reaches its lowest level over lookback period.
     
@@ -733,7 +733,7 @@ def bbands_bounce(close: pd.Series,
                  low: pd.Series,
                  bb_lower: pd.Series) -> pd.Series:
     """
-    Detect Bollinger Bands bounce signal 
+    Detect Bollinger Bands bounce signal - pure function.
     
     Bounce occurs when:
     1. Previous close was below lower band
@@ -764,7 +764,7 @@ def bbands_bounce(close: pd.Series,
 
 def bbands_breakout(high: pd.Series, bb_upper: pd.Series) -> pd.Series:
     """
-    Detect Bollinger Bands upper breakout
+    Detect Bollinger Bands upper breakout - pure function.
     
     Breakout occurs when price crosses above upper band.
     
@@ -793,7 +793,7 @@ def stochastic_macd(ohlc: pd.DataFrame,
                    signal_period: int = 9,
                    adjust: bool = True) -> Dict[str, pd.Series]:
     """
-    Calculate Stochastic MACD Oscillator
+    Calculate Stochastic MACD Oscillator - pure function.
     
     The Stochastic MACD combines the stochastic oscillator concept with MACD,
     normalizing the MACD values to the recent price range for better overbought/
@@ -866,7 +866,7 @@ def rsema(price: pd.Series,
          multiplier: float = 10.0,
          adjust: bool = True) -> pd.Series:
     """
-    Calculate Relative Strength EMA (RS-EMA)
+    Calculate Relative Strength EMA (RS-EMA) - pure function.
     
     RS-EMA is a volatility-adjusted exponential moving average that uses
     relative strength to dynamically adjust the smoothing rate. It becomes
@@ -929,3 +929,113 @@ def rsema(price: pd.Series,
         rsema_values[i] = rate.iloc[i] * price.iloc[i] + (1.0 - rate.iloc[i]) * rsema_values[i-1]
     
     return pd.Series(rsema_values, index=price.index, name='RSEMA')
+
+
+def smi(ohlc: pd.DataFrame,
+        k_period: int = 14, d_period: int = 3) -> pd.DataFrame:
+    """
+    Stochastic Momentum Index (SMI).
+    
+    Formula:
+    $$ SMI = \frac{\text{DoubleSmooth}(Close - Midpoint)}{\text{DoubleSmooth}(High - Low) / 2} \times 100 $$
+    
+    Args:
+        high (pd.Series): High prices
+        low (pd.Series): Low prices
+        close (pd.Series): Close prices
+        k_period (int): Lookback for High/Low range
+        d_period (int): Smoothing period for EMAs
+        
+    Returns:
+        pd.DataFrame: Columns ['SMI', 'SMI_SIGNAL']
+    """
+    # Create a copy and standardize column names
+    data = ohlc.copy()
+    data.columns = [c.lower() for c in data.columns]
+    
+    # 1. Calculate highest high and lowest low
+    highest_high =  data['high'].rolling(window=k_period, min_periods=k_period).max()
+    lowest_low = data['low'].rolling(window=k_period, min_periods=k_period).min()
+    close = data['close']
+
+    # 2. Calculate relative difference and range
+    # Midpoint of the range
+    midpoint = (highest_high + lowest_low) / 2
+    rel_diff = close - midpoint
+    price_range = highest_high - lowest_low
+
+    # 3. Double EMA smoothing
+    # First smoothing
+    smooth_rel_1 = rel_diff.ewm(span=d_period, adjust=False).mean()
+    smooth_diff_1 = price_range.ewm(span=d_period, adjust=False).mean()
+
+    # Second smoothing
+    avg_rel = smooth_rel_1.ewm(span=d_period, adjust=False).mean()
+    avg_diff = smooth_diff_1.ewm(span=d_period, adjust=False).mean()
+
+    # 4. Calculate SMI
+    # Handle division by zero if price range is flat
+    with np.errstate(divide='ignore', invalid='ignore'):
+        smi_val = avg_rel / (avg_diff / 2) * 100
+
+    smi_val = smi_val.replace([np.inf, -np.inf], 0).fillna(0)
+
+    # 5. Calculate Signal Line (EMA of SMI)
+    smi_signal = smi_val.ewm(span=d_period, adjust=False).mean()
+
+    return {
+        'SMI': smi_val,
+        'SMI_SIGNAL': smi_signal
+    }
+
+
+def tr(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+    """Calculates True Range."""
+    prev_close = close.shift(1)
+    tr1 = high - low
+    tr2 = (high - prev_close).abs()
+    tr3 = (low - prev_close).abs()
+    return pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+
+def cama(ohlc: pd.DataFrame, period: int = 20) -> pd.Series:
+    """
+    Custom Adaptive Moving Average (CAMA).
+    Alpha is based on Ratio of (High-Low Range) / (Sum of True Range).
+    """
+    # Create a copy and standardize column names
+    data = ohlc.copy()
+    data.columns = [c.lower() for c in data.columns]
+    
+    # 1. Calculate Components
+    highest_high =  data['high'].rolling(window=period, min_periods=period).max()
+    lowest_low = data['low'].rolling(window=period, min_periods=period).min()
+    close =  data['close']
+    true_range = tr(data['high'], data['low'], close)
+    
+    high_low_range = highest_high - lowest_low
+    effort = true_range.rolling(window=period).sum().fillna(0)
+    
+    # 2. Calculate Adaptive Alpha
+    # Default alpha to 0 to prevent erratic jumps if effort is 0, 
+    # though user snippet had 1.0. We use safe division.
+    alpha = pd.Series(0.0, index=close.index)
+    
+    # Avoid division by zero
+    valid_mask = (effort != 0)
+    alpha[valid_mask] = high_low_range[valid_mask] / effort[valid_mask]
+    
+    # 3. Recursive Calculation
+    price_values = close.values
+    alpha_values = alpha.values
+    cama_values = np.zeros_like(price_values)
+    
+    # Initialization
+    cama_values[0] = price_values[0]
+    
+    for i in range(1, len(price_values)):
+        # Formula: CAMA[i] = Alpha * Price + (1-Alpha) * CAMA[i-1]
+        a = alpha_values[i]
+        cama_values[i] = a * price_values[i] + (1 - a) * cama_values[i-1]
+        
+    return pd.Series(cama_values, index=close.index, name=f"CAMA_{period}")
