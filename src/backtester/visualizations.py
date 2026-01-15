@@ -1,4 +1,3 @@
-"""Visualization utilities for backtest analysis."""
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,28 +8,17 @@ from matplotlib.gridspec import GridSpec
 
 def plot_equity_curve(daily_values, initial_capital: float, 
                       title: str = "Portfolio Equity Curve"):
-    """
-    Plot portfolio equity curve with profit/loss shading.
-    
-    Args:
-        daily_values: DataFrame with 'date' and 'total_value' columns
-        initial_capital: Starting capital
-        title: Chart title
-    """
     fig, ax = plt.subplots(figsize=(14, 6))
     
     df = pd.DataFrame(daily_values)
     df.set_index('date', inplace=True)
     
-    # Plot equity curve
     ax.plot(df.index, df['total_value'], linewidth=2, color='darkblue', 
             label='Portfolio Value', zorder=3)
     
-    # Initial capital line
     ax.axhline(y=initial_capital, color='red', linestyle='--', 
                alpha=0.7, linewidth=1.5, label='Initial Capital')
     
-    # Profit/loss shading
     ax.fill_between(df.index, initial_capital, df['total_value'],
                      where=(df['total_value'] >= initial_capital),
                      alpha=0.3, color='green', label='Profit Zone')
@@ -38,14 +26,12 @@ def plot_equity_curve(daily_values, initial_capital: float,
                      where=(df['total_value'] < initial_capital),
                      alpha=0.3, color='red', label='Loss Zone')
     
-    # Formatting
     ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
     ax.set_xlabel('Date', fontsize=12, fontweight='bold')
     ax.set_ylabel('Portfolio Value ($)', fontsize=12, fontweight='bold')
     ax.legend(loc='best', fontsize=10)
     ax.grid(True, alpha=0.3, linestyle='--')
     
-    # Format y-axis as currency
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x:,.0f}'))
     
     plt.tight_layout()
@@ -53,28 +39,18 @@ def plot_equity_curve(daily_values, initial_capital: float,
 
 
 def plot_drawdown(daily_values, title: str = "Portfolio Drawdown"):
-    """
-    Plot drawdown chart showing underwater periods.
-    
-    Args:
-        daily_values: DataFrame with 'date' and 'total_value' columns
-        title: Chart title
-    """
     fig, ax = plt.subplots(figsize=(14, 6))
     
     df = pd.DataFrame(daily_values)
     df.set_index('date', inplace=True)
     
-    # Calculate drawdown
     running_max = df['total_value'].cummax()
     drawdown = (df['total_value'] - running_max) / running_max * 100
     
-    # Plot
     ax.fill_between(df.index, 0, drawdown, alpha=0.7, color='red', 
                      label='Drawdown')
     ax.plot(df.index, drawdown, linewidth=1.5, color='darkred', zorder=3)
     
-    # Mark maximum drawdown
     max_dd_idx = drawdown.idxmin()
     max_dd_val = drawdown.min()
     ax.scatter(max_dd_idx, max_dd_val, color='darkred', s=100, 
@@ -85,7 +61,6 @@ def plot_drawdown(daily_values, title: str = "Portfolio Drawdown"):
                 fontsize=10, fontweight='bold',
                 bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.7))
     
-    # Formatting
     ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
     ax.set_xlabel('Date', fontsize=12, fontweight='bold')
     ax.set_ylabel('Drawdown (%)', fontsize=12, fontweight='bold')
@@ -99,26 +74,16 @@ def plot_drawdown(daily_values, title: str = "Portfolio Drawdown"):
 
 def plot_returns_distribution(daily_values, 
                               title: str = "Daily Returns Distribution"):
-    """
-    Plot distribution of daily returns with statistics.
-    
-    Args:
-        daily_values: DataFrame with 'date' and 'total_value' columns
-        title: Chart title
-    """
     fig, ax = plt.subplots(figsize=(12, 6))
     
     df = pd.DataFrame(daily_values)
     df.set_index('date', inplace=True)
     
-    # Calculate returns
     returns = df['total_value'].pct_change().dropna() * 100
     
-    # Plot histogram
     n, bins, patches = ax.hist(returns, bins=50, alpha=0.7, color='steelblue', 
                                 edgecolor='black', density=True)
     
-    # Color bars by positive/negative
     for i, patch in enumerate(patches):
         if bins[i] < 0:
             patch.set_facecolor('red')
@@ -127,19 +92,16 @@ def plot_returns_distribution(daily_values,
             patch.set_facecolor('green')
             patch.set_alpha(0.6)
     
-    # Fit normal distribution
     mu, sigma = returns.mean(), returns.std()
     x = np.linspace(returns.min(), returns.max(), 100)
     from scipy.stats import norm
     ax.plot(x, norm.pdf(x, mu, sigma), 'k--', linewidth=2, 
             label=f'Normal(μ={mu:.3f}, σ={sigma:.3f})')
     
-    # Statistics lines
     ax.axvline(x=mu, color='red', linestyle='--', linewidth=2, 
                label=f'Mean: {mu:.3f}%')
     ax.axvline(x=0, color='black', linestyle='-', linewidth=1, alpha=0.5)
     
-    # Text box with statistics
     stats_text = (
         f'Statistics:\n'
         f'Mean: {mu:.3f}%\n'
@@ -152,7 +114,6 @@ def plot_returns_distribution(daily_values,
             fontsize=10, verticalalignment='top', horizontalalignment='right',
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
-    # Formatting
     ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
     ax.set_xlabel('Daily Return (%)', fontsize=12, fontweight='bold')
     ax.set_ylabel('Density', fontsize=12, fontweight='bold')
@@ -165,13 +126,6 @@ def plot_returns_distribution(daily_values,
 
 def plot_trade_analysis(trades, 
                        title: str = "Trade Analysis Dashboard"):
-    """
-    Plot comprehensive trade analysis with multiple subplots.
-    
-    Args:
-        trades: DataFrame with trade data
-        title: Main title
-    """
     df = pd.DataFrame(trades)
     closed_trades = df[df['action'] == 'CLOSE'].copy()
     closed_trades['net_pnl'] = closed_trades['pnl']
@@ -179,11 +133,9 @@ def plot_trade_analysis(trades,
         print("⚠️  No closed trades to analyze")
         return
     
-    # Create figure with subplots
     fig = plt.figure(figsize=(16, 12))
     gs = GridSpec(3, 2, figure=fig, hspace=0.3, wspace=0.3)
     
-    # 1. P&L by Ticker
     ax1 = fig.add_subplot(gs[0, 0])
     pnl_by_ticker = closed_trades.groupby('ticker')['net_pnl'].sum().sort_values()
     colors = ['green' if x >= 0 else 'red' for x in pnl_by_ticker.values]
@@ -194,7 +146,6 @@ def plot_trade_analysis(trades,
     ax1.grid(True, alpha=0.3, axis='x')
     ax1.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x:,.0f}'))
     
-    # 2. Win Rate by Ticker
     ax2 = fig.add_subplot(gs[0, 1])
     win_rate = closed_trades.groupby('ticker').apply(
         lambda x: (x['net_pnl'] > 0).sum() / len(x) * 100,
@@ -208,7 +159,6 @@ def plot_trade_analysis(trades,
     ax2.grid(True, alpha=0.3, axis='y')
     plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
     
-    # 3. Cumulative P&L
     ax3 = fig.add_subplot(gs[1, :])
     closed_trades_sorted = closed_trades.sort_values('execution_date')
     closed_trades_sorted['cumulative_pnl'] = closed_trades_sorted['net_pnl'].cumsum()
@@ -225,7 +175,6 @@ def plot_trade_analysis(trades,
     ax3.grid(True, alpha=0.3)
     ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x:,.0f}'))
     
-    # 4. Trade P&L Distribution
     ax4 = fig.add_subplot(gs[2, 0])
     ax4.hist(closed_trades['net_pnl'], bins=30, alpha=0.7, 
              color='steelblue', edgecolor='black')
@@ -240,7 +189,6 @@ def plot_trade_analysis(trades,
     ax4.legend()
     ax4.grid(True, alpha=0.3)
     
-    # 5. Win/Loss Statistics
     ax5 = fig.add_subplot(gs[2, 1])
     winners = closed_trades[closed_trades['net_pnl'] > 0]
     losers = closed_trades[closed_trades['net_pnl'] < 0]
@@ -270,7 +218,6 @@ def plot_trade_analysis(trades,
     ax5_twin.legend(loc='upper right')
     ax5.grid(True, alpha=0.3, axis='y')
     
-    # Main title
     fig.suptitle(title, fontsize=16, fontweight='bold', y=0.995)
     
     plt.show()
@@ -278,23 +225,13 @@ def plot_trade_analysis(trades,
 
 def plot_monthly_returns(daily_values,
                         title: str = "Monthly Returns Heatmap"):
-    """
-    Plot monthly returns heatmap.
-    
-    Args:
-        daily_values: DataFrame with 'date' and 'total_value' columns
-        title: Chart title
-    """
     df = pd.DataFrame(daily_values)
     df.set_index('date', inplace=True)
     
-    # Calculate daily returns
     df['returns'] = df['total_value'].pct_change()
     
-    # Resample to monthly
     monthly = df['returns'].resample('ME').apply(lambda x: (1 + x).prod() - 1) * 100
     
-    # Create pivot table for heatmap
     monthly_df = pd.DataFrame({
         'year': monthly.index.year,
         'month': monthly.index.month,
@@ -303,7 +240,6 @@ def plot_monthly_returns(daily_values,
     
     pivot = monthly_df.pivot(index='year', columns='month', values='return')
     
-    # Create heatmap
     fig, ax = plt.subplots(figsize=(14, 8))
     
     sns.heatmap(pivot, annot=True, fmt='.2f', cmap='RdYlGn', center=0,
@@ -314,7 +250,6 @@ def plot_monthly_returns(daily_values,
     ax.set_xlabel('Month', fontsize=12, fontweight='bold')
     ax.set_ylabel('Year', fontsize=12, fontweight='bold')
     
-    # Month names
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     ax.set_xticklabels(month_names, rotation=0)
@@ -325,30 +260,18 @@ def plot_monthly_returns(daily_values,
 
 def plot_rolling_metrics(daily_values, window: int = 60,
                          title: str = "Rolling Performance Metrics"):
-    """
-    Plot rolling Sharpe ratio and volatility.
-    
-    Args:
-        daily_values: DataFrame with 'date' and 'total_value' columns
-        window: Rolling window in days
-        title: Chart title
-    """
     df = pd.DataFrame(daily_values)
     df.set_index('date', inplace=True)
     
-    # Calculate returns
     returns = df['total_value'].pct_change().dropna()
     
-    # Rolling metrics
     rolling_sharpe = returns.rolling(window).apply(
         lambda x: np.sqrt(252) * x.mean() / x.std() if x.std() != 0 else 0
     )
     rolling_vol = returns.rolling(window).std() * np.sqrt(252) * 100
     
-    # Create subplots
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
     
-    # Rolling Sharpe
     ax1.plot(rolling_sharpe.index, rolling_sharpe, linewidth=2, 
              color='darkblue', label=f'{window}-Day Rolling Sharpe')
     ax1.axhline(y=0, color='red', linestyle='--', alpha=0.5)
@@ -364,7 +287,6 @@ def plot_rolling_metrics(daily_values, window: int = 60,
     ax1.legend(loc='best')
     ax1.grid(True, alpha=0.3)
     
-    # Rolling Volatility
     ax2.plot(rolling_vol.index, rolling_vol, linewidth=2, 
              color='darkred', label=f'{window}-Day Rolling Volatility')
     ax2.fill_between(rolling_vol.index, 0, rolling_vol, alpha=0.3, color='red')
@@ -382,36 +304,24 @@ def plot_rolling_metrics(daily_values, window: int = 60,
 
 def plot_underwater_chart(daily_values,
                           title: str = "Underwater (Drawdown) Chart"):
-    """
-    Plot underwater chart showing time underwater.
-    
-    Args:
-        daily_values: DataFrame with 'date' and 'total_value' columns
-        title: Chart title
-    """
     fig, ax = plt.subplots(figsize=(14, 6))
     
     df = pd.DataFrame(daily_values)
     df.set_index('date', inplace=True)
     
-    # Calculate drawdown
     running_max = df['total_value'].cummax()
     drawdown = (df['total_value'] - running_max) / running_max * 100
     
-    # Find underwater periods
-    underwater = drawdown < -0.1  # More than 0.1% underwater
+    underwater = drawdown < -0.1
     
-    # Plot
     ax.fill_between(df.index, -100, 0, where=underwater, 
                      alpha=0.5, color='red', label='Underwater')
     ax.plot(df.index, drawdown, linewidth=1.5, color='darkred')
     
-    # Calculate underwater statistics
     underwater_periods = (underwater != underwater.shift()).cumsum()
     underwater_lengths = underwater.groupby(underwater_periods).sum()
     max_underwater = underwater_lengths.max() if len(underwater_lengths) > 0 else 0
     
-    # Add statistics text
     stats_text = (
         f'Max Underwater Period: {max_underwater} days\n'
         f'Current DD: {drawdown.iloc[-1]:.2f}%\n'
@@ -421,7 +331,6 @@ def plot_underwater_chart(daily_values,
             fontsize=10, verticalalignment='bottom',
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
-    # Formatting
     ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
     ax.set_xlabel('Date', fontsize=12, fontweight='bold')
     ax.set_ylabel('Drawdown (%)', fontsize=12, fontweight='bold')
@@ -436,14 +345,6 @@ def plot_underwater_chart(daily_values,
 
 def plot_per_ticker_performance(portfolio: Dict,
                                 title: str = "Per-Ticker Performance"):
-    """
-    Plot performance breakdown by ticker.
-    
-    Args:
-        portfolio: Portfolio state dictionary
-        title: Chart title
-    """
-    # Extract ticker data
     ticker_data = []
     for ticker, account in portfolio['ticker_accounts'].items():
         ticker_data.append({
@@ -455,10 +356,8 @@ def plot_per_ticker_performance(portfolio: Dict,
     
     df = pd.DataFrame(ticker_data).sort_values('pnl', ascending=True)
     
-    # Create figure
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
     
-    # P&L chart
     colors = ['green' if x >= 0 else 'red' for x in df['pnl']]
     df.plot(x='ticker', y='pnl', kind='barh', ax=ax1, color=colors, 
             legend=False, edgecolor='black')
@@ -469,7 +368,6 @@ def plot_per_ticker_performance(portfolio: Dict,
     ax1.grid(True, alpha=0.3, axis='x')
     ax1.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x:,.0f}'))
     
-    # Return % chart
     colors = ['green' if x >= 0 else 'red' for x in df['return_pct']]
     df.plot(x='ticker', y='return_pct', kind='barh', ax=ax2, color=colors,
             legend=False, edgecolor='black')
@@ -485,61 +383,29 @@ def plot_per_ticker_performance(portfolio: Dict,
 
 
 def plot_performance_dashboard(results, initial_capital: float):
-    """
-    Create comprehensive performance dashboard.
-    
-    Combines multiple visualizations into one display.
-    
-    Args:
-        results: BacktestResults object
-        initial_capital: Starting capital
-    """
-     
-    # 1. Equity Curve
     plot_equity_curve(results["daily_values"], initial_capital)
-    
-    # 2. Drawdown
     plot_drawdown(results["daily_values"])
-    
-    # 3. Returns Distribution
     plot_returns_distribution(results["daily_values"])
-    
-    # 4. Trade Analysis
     plot_trade_analysis(results["trades"])
     
-    # 5. Monthly Returns Heatmap
     if len(results["daily_values"]) > 30:
         plot_monthly_returns(results["daily_values"])
     
-    # 6. Rolling Metrics
     if len(results["daily_values"]) > 60:
         plot_rolling_metrics(results["daily_values"], window=60)
     
-    # 7. Underwater Chart
     plot_underwater_chart(results["daily_values"])
-    
-    # 8. Per-Ticker Performance
     plot_per_ticker_performance(results)
 
 
 def save_all_charts(results, initial_capital: float, output_dir: str = 'results/'):
-    """
-    Save all charts to files instead of displaying.
-    
-    Args:
-        results: BacktestResults object
-        initial_capital: Starting capital
-        output_dir: Directory to save charts
-    """
     import os
     os.makedirs(output_dir, exist_ok=True)
     
-    # Temporarily disable interactive mode
     plt.ioff()
     
     print(f"\n Saving charts to {output_dir}...")
     
-    # Save each chart
     charts = [
         ('equity_curve.png', lambda: plot_equity_curve(results.daily_values, initial_capital)),
         ('drawdown.png', lambda: plot_drawdown(results.daily_values)),
@@ -561,7 +427,6 @@ def save_all_charts(results, initial_capital: float, output_dir: str = 'results/
         except Exception as e:
             print(f"   Failed to save {filename}: {e}")
     
-    # Re-enable interactive mode
     plt.ion()
     
     print(f"\n Charts saved to {output_dir}\n")
