@@ -1,13 +1,4 @@
----
-layout: default
-title: AMA-KAMA Strategy
-parent: Strategies
-nav_order: 3
-permalink: /docs/alpha-research/strategies/ama-kama/
----
-
 # AMA-KAMA: Dual Adaptive Momentum
-{: .fs-7 }
 
 A trend-reversion system that pairs two variations of Perry Kaufman's Adaptive Moving Average to identify high-fidelity entries, filtered by volatility regimes.
 {: .fs-5 .fw-300 }

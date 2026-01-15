@@ -1,15 +1,5 @@
----
-layout: default
-title: Strategies
-parent: Systematic Alpha Research
-nav_order: 3
-has_children: true
-has_toc: false
-permalink: /docs/alpha-research/strategies/
----
-
 # Systematic Trading Strategies & Backtesting
-{: .fs-7 }
+
 
 Systematic trading algorithms validated through Walk-Forward Analysis.
 {: .fs-5 .fw-300 }

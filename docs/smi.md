@@ -1,13 +1,5 @@
----
-layout: default
-title: SMI Strategy
-parent: Strategies
-nav_order: 2
-permalink: /docs/alpha-research/strategies/smi/
----
-
 # SMI: Stochastic Momentum Reversion
-{: .fs-7 }
+
 
 A highly robust mean-reversion system that identifies deep value entries within medium-term volatility cycles.
 {: .fs-5 .fw-300 }

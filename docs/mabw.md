@@ -1,13 +1,5 @@
----
-layout: default
-title:  "MABW Strategy"
-parent: Strategies
-nav_order: 4
-permalink: /docs/alpha-research/strategies/mabw/
----
-
 # MABW: Volatility Breakout Strategy
-{: .fs-7 }
+
 
 A systematic trend-following strategy that exploits volatility clustering by entering trends during periods of extreme compression and exiting during excessive expansion.
 {: .fs-5 .fw-300 }
