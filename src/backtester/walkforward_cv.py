@@ -409,6 +409,7 @@ def optimize_global_parameters(windows: List[Dict],
     )
     
     print(f"Global Optimization Complete. Best Score: {study.best_value:.4f}")
+    print(study.best_params)
     return study.best_params, study
 
 
