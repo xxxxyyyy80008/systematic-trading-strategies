@@ -269,6 +269,10 @@ def calculate_objective(win_rate: float,
     normalized_sharpe = max(0, min(1, (sharpe_ratio + 3) / 6))
     return win_rate_weight * win_rate + sharpe_weight * normalized_sharpe
 
+# ============================================================================
+# 4. OPTIMIZATION CORE (METHOD 2) - REVISED FOR REPRODUCIBILITY
+# ============================================================================
+
 def create_global_objective_function(windows: List[Dict],
                                      data_dict: Dict[str, pd.DataFrame],
                                      param_space: Dict[str, Tuple],
@@ -279,9 +283,12 @@ def create_global_objective_function(windows: List[Dict],
                                      objective_weights: Tuple[float, float]) -> Callable:
     
     def objective(trial: optuna.Trial) -> float:
-        # 1. Suggest Parameters
+        # 1. Suggest Parameters (DETERMINISTIC ORDER REQUIRED)
+        # We sort keys to ensure trial.suggest_* is called in the exact same order every time.
         params = {}
-        for param_name, (param_type, *args) in param_space.items():
+        for param_name in sorted(param_space.keys()):
+            param_type, *args = param_space[param_name]
+            
             if param_type == 'int':
                 params[param_name] = trial.suggest_int(param_name, args[0], args[1])
             elif param_type == 'float':
@@ -289,61 +296,66 @@ def create_global_objective_function(windows: List[Dict],
             elif param_type == 'categorical':
                 params[param_name] = trial.suggest_categorical(param_name, args[0])
         
-        # 2. Cross-Validation Loop
         window_scores = []
-        results_list = [] # <--- FIX: Initialize list to store full results
         total_trades_all_windows = 0
+        max_drawdowns = []
         
+        # 2. Cross-Validation Loop
         for i, window in enumerate(windows):
             train_data = filter_data_by_date(data_dict, window['train_start'], window['train_end'])
+            
+            # Skip empty windows safely
             if not train_data: continue
             
-            # Run Backtest
             results = run_backtest(train_data, params, strategy_class, strategy_name, trade_config)
-            results_list.append(results) 
             
+            # CRASH PENALTY
             if 'error' in results:
-                window_scores.append(-1.0)
+                window_scores.append(-10.0) 
                 continue
-                
-            score = calculate_objective(
-                results.get('win_rate', 0),
-                results.get('sharpe_ratio', 0),
-                objective_weights[0],
-                objective_weights[1]
-            )
             
-            window_scores.append(score)
+            # A. Get Base Metrics
+            sharpe = results.get('sharpe_ratio', 0)
+            win_rate = results.get('win_rate', 0)
+            max_dd = results.get('max_drawdown', 100.0) / 100.0 # Convert 20% to 0.2
+            
+            # B. Penalize Volatility (Deflated Score)
+            risk_adjusted_score = (sharpe * objective_weights[1] + win_rate * objective_weights[0]) / (1 + (max_dd * 2))
+            
+            # C. Hard Drawdown Cap
+            if max_dd > 0.25:
+                risk_adjusted_score -= 1.0 
+
+            window_scores.append(risk_adjusted_score)
+            max_drawdowns.append(max_dd)
             total_trades_all_windows += results.get('total_trades', 0)
 
-            # Pruning Logic
-            current_avg_score = np.mean(window_scores)
-            trial.report(current_avg_score, i)
+            # Pruning
+            current_conservative_score = np.mean(window_scores) - (0.5 * np.std(window_scores))
+            trial.report(current_conservative_score, i)
             if trial.should_prune():
-                trial.set_user_attr("pruned_at_window", i)
                 raise optuna.TrialPruned()
 
         # 3. Final Aggregation
         if not window_scores: return -999.0
             
-        avg_score = np.mean(window_scores)
+        mean_score = np.mean(window_scores)
+        std_score = np.std(window_scores)
+        min_score = np.min(window_scores)
         
-        # Calculate Average Drawdown safely
-        avg_max_dd = 0.0
-        if results_list:
-             avg_max_dd = np.mean([res.get('max_drawdown', 0.0) for res in results_list])
-
-        # Activity Constraint
+        # Robust Score Calculation
+        robust_score = (0.7 * (mean_score - 0.5 * std_score)) + (0.3 * min_score)
+        
         if total_trades_all_windows < (min_trades * len(window_scores) * 0.5):
             return -999.0
 
-        # Store attributes for analysis
-        trial.set_user_attr('avg_score', avg_score)
-        trial.set_user_attr('min_score', np.min(window_scores))
-        trial.set_user_attr('std_score', np.std(window_scores))
-        trial.set_user_attr('max_drawdown', avg_max_dd)
+        # Store attributes
+        trial.set_user_attr('avg_score', mean_score)
+        trial.set_user_attr('robust_score', robust_score)
+        trial.set_user_attr('worst_window_score', min_score)
+        trial.set_user_attr('max_drawdown', np.mean(max_drawdowns))
         
-        return avg_score
+        return robust_score
 
     return objective
 
@@ -357,6 +369,8 @@ def optimize_global_parameters(windows: List[Dict],
                                objective_weights: Tuple[float, float]) -> Tuple[Dict, optuna.Study]:
     
     print(f"\nRunning Global Optimization on {len(windows)} windows...")
+    
+    # 1. Global Seed
     set_random_seed(wf_config['random_seed'])
     
     objective_fn = create_global_objective_function(
@@ -364,8 +378,12 @@ def optimize_global_parameters(windows: List[Dict],
         trade_config, wf_config['min_trades'], objective_weights
     )
     
-    # Pruner Configuration
-    pruner = MedianPruner(n_startup_trials=wf_config['n_startup_trials'], n_warmup_steps=3, interval_steps=1)
+    # 2. Deterministic Pruner & Sampler
+    pruner = MedianPruner(n_startup_trials=wf_config['n_startup_trials'], 
+                          n_warmup_steps=3, 
+                          interval_steps=1)
+    
+    # Crucial: TPESampler must be explicitly seeded
     sampler = TPESampler(seed=wf_config['random_seed'])
 
     study = optuna.create_study(
@@ -375,17 +393,24 @@ def optimize_global_parameters(windows: List[Dict],
         study_name=f'{strategy_name}_global_cv'
     )
     
+    # 3. Enforce Single Job for Reproducibility
+    # Parallel jobs (n_jobs > 1) introduce race conditions in trial reporting,
+    # causing the TPE history to diverge between runs.
+    n_jobs_safe = 1 
+    if wf_config['n_jobs'] != 1:
+        print("Warning: forcing n_jobs=1 to ensure strict reproducibility.")
+    
     study.optimize(
         objective_fn,
         n_trials=wf_config['n_trials'],
         timeout=wf_config['timeout'],
-        n_jobs=wf_config['n_jobs'],
+        n_jobs=n_jobs_safe, 
         show_progress_bar=True
     )
     
     print(f"Global Optimization Complete. Best Score: {study.best_value:.4f}")
-    print(study.best_params)
     return study.best_params, study
+
 
 # ============================================================================
 # 5. ANALYSIS & VISUALIZATION
@@ -425,14 +450,14 @@ def analyze_cluster_stability(study: optuna.Study, top_n: int = 20) -> pd.DataFr
         })
         
     return pd.DataFrame(results).sort_values('stability_score', ascending=False)
+# ============================================================================
+# 5. ANALYSIS & VISUALIZATION - REVISED FOR REPRODUCIBILITY
+# ============================================================================
 
-def calculate_param_importance(study: optuna.Study) -> pd.DataFrame:
+def calculate_param_importance(study: optuna.Study, random_seed: int = 42) -> pd.DataFrame:
     """
     Calculates parameter importance using Mean Decrease Impurity (MDI).
-    
-    Fixes the 'setting an array element with a sequence' bug by:
-    1. Using Random Forest (MDI) evaluator instead of fANOVA (which crashes on constants).
-    2. filtering out parameters that did not vary during the trials.
+    Reproducibility Fix: Passes random_state to the internal Random Forest.
     """
     try:
         # 1. Filter for completed trials
@@ -441,29 +466,34 @@ def calculate_param_importance(study: optuna.Study) -> pd.DataFrame:
             return pd.DataFrame()
 
         # 2. Identify parameters that actually vary
-        # Evaluators often crash if a parameter has the same value in ALL trials.
         param_values = {}
         for t in valid_trials:
             for p, v in t.params.items():
                 if p not in param_values: param_values[p] = set()
                 param_values[p].add(v)
         
-        # Only keep params with > 1 unique value
         variable_params = [p for p, vals in param_values.items() if len(vals) > 1]
         
         if not variable_params:
-            print("Warning: No parameters varied significantly during optimization. Skipping importance.")
+            print("Warning: No parameters varied significantly. Skipping importance.")
             return pd.DataFrame()
 
-        # 3. Calculate Importance using Random Forest (MDI)
-        # MDI is robust to static parameters and mixed types.
-        evaluator = MeanDecreaseImpurityImportanceEvaluator()
+        # 3. Calculate Importance with SEED
+        # The Random Forest used here must be seeded!
+        evaluator = MeanDecreaseImpurityImportanceEvaluator(n_trees=64, max_depth=64, seed=random_seed)
         
         importance = optuna.importance.get_param_importances(
             study, 
             evaluator=evaluator,
-            params=variable_params # Explicitly pass only varying params
+            params=variable_params
         )
+        
+        df = pd.DataFrame(list(importance.items()), columns=['parameter', 'importance'])
+        return df.sort_values('importance', ascending=False)
+
+    except Exception as e:
+        print(f"Param importance error: {e}")
+        return pd.DataFrame()
         
         # 4. Format Output
         df = pd.DataFrame(list(importance.items()), columns=['parameter', 'importance'])
@@ -640,7 +670,6 @@ def walk_forward_analysis(data_dict: Dict[str, pd.DataFrame],
 
     return results_df, study
 
-
 def run_walkforward(data_dict: Dict[str, pd.DataFrame],
                           param_space: Dict[str, Tuple],
                           strategy_class: type,
@@ -665,13 +694,13 @@ def run_walkforward(data_dict: Dict[str, pd.DataFrame],
         if not stability_df.empty:
             print(stability_df[['parameter', 'cv', 'range_ratio', 'assessment']].to_string())
 
-    # C. Importance Analysis
-    sensitivity_df = calculate_param_importance(global_study)
+    # C. Importance Analysis (Passed Seed)
+    sensitivity_df = calculate_param_importance(global_study, random_seed=wf_config.get('random_seed', 42))
     if verbose and not sensitivity_df.empty:
         print("\n--- Parameter Importance ---")
         print(sensitivity_df.head(5).to_string())
 
-    # D. Visualization (Top 2 Important Params)
+    # D. Visualization
     if not sensitivity_df.empty:
         top_params = sensitivity_df['parameter'].head(2).tolist()
         if len(top_params) == 2:
@@ -681,6 +710,7 @@ def run_walkforward(data_dict: Dict[str, pd.DataFrame],
     export_results(results_df, global_study, sensitivity_df, output_dir="wf_method2_results")
     
     return results_df, sensitivity_df
+
 
 
 def create_global_objective_function(windows: List[Dict],
