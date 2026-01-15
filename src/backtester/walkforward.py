@@ -1,7 +1,3 @@
-"""
-Walk-Forward Analysis with Optuna Optimization (Fixed Version)
-"""
-
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Callable, Any, Union
@@ -10,27 +6,19 @@ import optuna
 from optuna.samplers import TPESampler
 import warnings
 import random
-from scipy import stats  # Added missing import
+from scipy import stats
 
 warnings.filterwarnings('ignore')
 
-# Assumed internal modules (mock placeholders for context if running standalone)
 try:
     from .backtest_engine import BacktestEngine
     from .types_core import StrategyConfig, TradeConfig
 except ImportError:
-    # These would normally exist in the user's environment
-    pass 
-
-
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
+    pass
 
 def set_random_seed(seed: int = 2570):
     random.seed(seed)
     np.random.seed(seed)
-  
 
 def create_wf_config(training_days: int = 252,
                      testing_days: int = 63,
@@ -51,16 +39,10 @@ def create_wf_config(training_days: int = 252,
         'random_seed': random_seed
     }
 
-
-# ============================================================================
-# DATA FILTERING
-# ============================================================================
-
 def filter_data_by_date(data_dict: Dict[str, pd.DataFrame],
                         start_date: datetime,
                         end_date: datetime) -> Dict[str, pd.DataFrame]:
     filtered = {}
-    # FIX: Ensure comparison consistency using pd.Timestamp
     ts_start = pd.Timestamp(start_date)
     ts_end = pd.Timestamp(end_date)
     
@@ -68,13 +50,11 @@ def filter_data_by_date(data_dict: Dict[str, pd.DataFrame],
         if df.empty:
             continue
             
-        # Ensure index consistency
         mask = (df.index >= ts_start) & (df.index <= ts_end)
         filtered_df = df[mask].copy()
         if not filtered_df.empty:
             filtered[ticker] = filtered_df
     return filtered
-
 
 def get_date_range(data_dict: Dict[str, pd.DataFrame]) -> Tuple[datetime, datetime]:
     all_dates = set()
@@ -83,16 +63,10 @@ def get_date_range(data_dict: Dict[str, pd.DataFrame]) -> Tuple[datetime, dateti
             all_dates.update(df.index)
             
     if not all_dates:
-        # Fallback if data is empty
         return datetime.now(), datetime.now()
         
     dates = sorted(all_dates)
     return dates[0], dates[-1]
-
-
-# ============================================================================
-# WINDOW GENERATION
-# ============================================================================
 
 def generate_windows(start_date: datetime,
                      end_date: datetime,
@@ -126,11 +100,6 @@ def generate_windows(start_date: datetime,
     
     return windows
 
-
-# ============================================================================
-# METRICS CALCULATION
-# ============================================================================
-
 def extract_closed_trades(trades_df: pd.DataFrame) -> pd.DataFrame:
     if trades_df is None or trades_df.empty:
         return pd.DataFrame()
@@ -152,7 +121,6 @@ def extract_closed_trades(trades_df: pd.DataFrame) -> pd.DataFrame:
             return closed
     
     return trades_df.copy()
-
 
 def calculate_trade_metrics(trades_df: pd.DataFrame) -> Dict:
     empty_metrics = {
@@ -213,7 +181,6 @@ def calculate_trade_metrics(trades_df: pd.DataFrame) -> Dict:
         'total_pnl': total_pnl
     }
 
-
 def calculate_returns_metrics(daily_values: pd.DataFrame, initial_capital: float) -> Dict:
     empty_metrics = {
         'total_return': 0.0, 'sharpe_ratio': 0.0, 'sortino_ratio': 0.0,
@@ -231,14 +198,11 @@ def calculate_returns_metrics(daily_values: pd.DataFrame, initial_capital: float
     if len(values) < 2:
         return empty_metrics
     
-    # Safe division to handle cases where portfolio value is 0
     denom = values[:-1]
     with np.errstate(divide='ignore', invalid='ignore'):
         returns = np.diff(values) / denom
-        # Remove NaNs and Infs resulting from division by zero
         returns = returns[np.isfinite(returns)]
     
-    # FIX: Handle case where all returns were filtered out (e.g., all infinite)
     if len(returns) == 0:
         return empty_metrics
     
@@ -255,11 +219,9 @@ def calculate_returns_metrics(daily_values: pd.DataFrame, initial_capital: float
     cumulative = np.cumprod(1 + returns)
     running_max = np.maximum.accumulate(cumulative)
     
-    # Handle potential division by zero if running_max is 0
     with np.errstate(divide='ignore', invalid='ignore'):
         drawdown = (cumulative - running_max) / running_max
     
-    # Clean up any NaNs from the drawdown calculation
     drawdown = drawdown[np.isfinite(drawdown)]
         
     max_drawdown = abs(np.min(drawdown)) * 100 if len(drawdown) > 0 else 0.0
@@ -274,18 +236,12 @@ def calculate_returns_metrics(daily_values: pd.DataFrame, initial_capital: float
         'calmar_ratio': calmar_ratio
     }
 
-
-# ============================================================================
-# BACKTEST EXECUTION
-# ============================================================================
-
 def run_backtest(data_dict: Dict[str, pd.DataFrame],
                 params: Dict,
                 strategy_class: type,
                 strategy_name: str,
                 trade_config: TradeConfig) -> Dict:
     
-    # Fail fast if no data
     if not data_dict:
          return {
             'total_trades': 0, 'winning_trades': 0, 'losing_trades': 0,
@@ -317,16 +273,10 @@ def run_backtest(data_dict: Dict[str, pd.DataFrame],
             'error': str(e)
         }
 
-
-# ============================================================================
-# PRINTING UTILITIES
-# ============================================================================
-
 def format_param_value(value) -> str:
     if isinstance(value, float):
         return f"{value:.4f}"
     return str(value)
-
 
 def print_best_parameters(params: Dict, study: optuna.Study, window_idx: int):
     print(f"\nWindow {window_idx} - Best Parameters")
@@ -360,7 +310,6 @@ def print_best_parameters(params: Dict, study: optuna.Study, window_idx: int):
     if 'max_drawdown' in attrs:
         print(f"    {'max_drawdown':25s} = {attrs['max_drawdown']:>9.2f}%")
 
-
 def calculate_summary_stats(results_df: pd.DataFrame, prefix: str) -> Dict:
     if results_df.empty:
         return {}
@@ -374,7 +323,6 @@ def calculate_summary_stats(results_df: pd.DataFrame, prefix: str) -> Dict:
         f'{prefix}_positive_windows': (results_df[f'{prefix}_total_return'] > 0).sum(),
         f'{prefix}_positive_pct': (results_df[f'{prefix}_total_return'] > 0).mean()
     }
-
 
 def print_summary(results_df: pd.DataFrame):
     print(f"\n{'='*80}")
@@ -400,18 +348,12 @@ def print_summary(results_df: pd.DataFrame):
     print(f"  Total Trades:     {holdout_stats['holdout_total_trades']:.0f}")
     print(f"  Positive Windows: {holdout_stats['holdout_positive_windows']}/{len(results_df)} ({holdout_stats['holdout_positive_pct']:.1%})")
 
-
-# ============================================================================
-# OPTIMIZATION
-# ============================================================================
-
 def calculate_objective(win_rate: float,
                        sharpe_ratio: float,
                        win_rate_weight: float = 0.35,
                        sharpe_weight: float = 0.65) -> float:
     normalized_sharpe = max(0, min(1, (sharpe_ratio + 3) / 6))
     return win_rate_weight * win_rate + sharpe_weight * normalized_sharpe
-
 
 def create_objective_function(data_dict: Dict[str, pd.DataFrame],
                              param_space: Dict[str, Tuple],
@@ -422,7 +364,6 @@ def create_objective_function(data_dict: Dict[str, pd.DataFrame],
                              objective_weights: Tuple[float, float]) -> Callable:
     
     def objective(trial: optuna.Trial) -> float:
-        # FIX: Fail fast if no data is available for this window
         if not data_dict:
             return -999.0
 
@@ -461,7 +402,6 @@ def create_objective_function(data_dict: Dict[str, pd.DataFrame],
     
     return objective
 
-
 def optimize_parameters(data_dict: Dict[str, pd.DataFrame],
                        param_space: Dict[str, Tuple],
                        strategy_class: type,
@@ -495,10 +435,6 @@ def optimize_parameters(data_dict: Dict[str, pd.DataFrame],
     
     return study.best_params, study
 
-
-# ============================================================================
-# WINDOW PROCESSING
-# ============================================================================
 def process_window(window: Dict,
                   window_idx: int,
                   data_dict: Dict[str, pd.DataFrame],
@@ -521,7 +457,6 @@ def process_window(window: Dict,
         print(f"Testing:   {window['test_start'].date()} to {window['test_end'].date()}")
         print(f"Holdout:   {window['holdout_start'].date()} to {window['holdout_end'].date()}")
     
-    # 1. Prepare Training Data
     train_data = filter_data_by_date(data_dict, window['train_start'], window['train_end'])
     if not train_data:
         if verbose:
@@ -531,7 +466,6 @@ def process_window(window: Dict,
     if verbose:
         print(f"\nOptimizing parameters...")
     
-    # 2. Run Optimization
     best_params, study = optimize_parameters(
         train_data, param_space, strategy_class, strategy_name,
         trade_config, wf_config, window_idx, objective_weights
@@ -545,7 +479,6 @@ def process_window(window: Dict,
     if verbose:
         print_best_parameters(best_params, study, window_idx)
     
-    # 3. Run Out-of-Sample Test
     test_data = filter_data_by_date(data_dict, window['test_start'], window['test_end'])
     if not test_data:
         if verbose:
@@ -563,7 +496,6 @@ def process_window(window: Dict,
               f"Sharpe: {test_results['sharpe_ratio']:.4f}, "
               f"Return: {test_results['total_return']:.2f}%")
     
-    # 4. Run Holdout Validation
     holdout_data = filter_data_by_date(data_dict, window['holdout_start'], window['holdout_end'])
     if not holdout_data:
         if verbose:
@@ -581,7 +513,6 @@ def process_window(window: Dict,
               f"Sharpe: {holdout_results['sharpe_ratio']:.4f}, "
               f"Return: {holdout_results['total_return']:.2f}%")
     
-    # 5. Construct Results Dictionary
     result = {
         'window': window_idx,
         'seed': seed,
@@ -600,10 +531,6 @@ def process_window(window: Dict,
     result.update({f'holdout_{k}': v for k, v in holdout_results.items() if k != 'error'})
     
     return result, study
-
-# ============================================================================
-# MAIN ANALYSIS
-# ============================================================================
 
 def walk_forward_analysis(data_dict: Dict[str, pd.DataFrame],
                          param_space: Dict[str, Tuple],
@@ -657,17 +584,11 @@ def walk_forward_analysis(data_dict: Dict[str, pd.DataFrame],
     
     return results_df, studies
 
-
-# ============================================================================
-# SENSITIVITY ANALYSIS
-# ============================================================================
-
 def calculate_param_importance(studies: List[optuna.Study]) -> pd.DataFrame:
     sensitivity_results = []
     
     for idx, study in enumerate(studies, 1):
         try:
-            # Check if study has completed trials to avoid error
             valid_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
             if not valid_trials:
                 continue
@@ -684,7 +605,6 @@ def calculate_param_importance(studies: List[optuna.Study]) -> pd.DataFrame:
     
     return pd.DataFrame(sensitivity_results) if sensitivity_results else pd.DataFrame()
 
-
 def aggregate_param_importance(sensitivity_df: pd.DataFrame) -> pd.DataFrame:
     if sensitivity_df.empty:
         return pd.DataFrame()
@@ -696,7 +616,6 @@ def aggregate_param_importance(sensitivity_df: pd.DataFrame) -> pd.DataFrame:
         ('max', 'max'),
         ('count', 'count')
     ]).sort_values('mean', ascending=False)
-
 
 def get_param_distributions(studies: List[optuna.Study], top_n: int = 5) -> Dict[str, Dict]:
     sensitivity_df = calculate_param_importance(studies)
@@ -724,7 +643,6 @@ def get_param_distributions(studies: List[optuna.Study], top_n: int = 5) -> Dict
     
     return distributions
 
-
 def analyze_param_stability(results_df: pd.DataFrame, param_name: str) -> Dict:
     param_col = f'best_{param_name}'
     if param_col not in results_df.columns:
@@ -735,9 +653,7 @@ def analyze_param_stability(results_df: pd.DataFrame, param_name: str) -> Dict:
     if values.empty:
         return {}
     
-    # FIX: Robust check for categorical parameters
     if not pd.api.types.is_numeric_dtype(values):
-        # Return simplified info for categorical/string parameters
         return {
             'parameter': param_name,
             'mean': np.nan,
@@ -748,14 +664,13 @@ def analyze_param_stability(results_df: pd.DataFrame, param_name: str) -> Dict:
             'cv': np.nan,
             'trend_slope': 0.0,
             'trend_r2': 0.0,
-            'is_stable': True  # Cannot determine stability mathematically for categories
+            'is_stable': True
         }
     
     mean_val = values.mean()
     std_val = values.std()
     cv = (std_val / mean_val) if mean_val != 0 else 0.0
     
-    # Perform linear regression only on numeric data
     x = np.arange(len(values))
     try:
         slope, intercept, r_value, p_value, std_err = stats.linregress(x, values)
@@ -776,7 +691,6 @@ def analyze_param_stability(results_df: pd.DataFrame, param_name: str) -> Dict:
         'is_stable': cv < 0.3
     }
 
-
 def analyze_all_params_stability(results_df: pd.DataFrame) -> pd.DataFrame:
     param_cols = [col for col in results_df.columns if col.startswith('best_')]
     
@@ -788,11 +702,6 @@ def analyze_all_params_stability(results_df: pd.DataFrame) -> pd.DataFrame:
             stability_results.append(stability)
     
     return pd.DataFrame(stability_results).sort_values('cv') if stability_results else pd.DataFrame()
-
-
-# ============================================================================
-# EXPORT RESULTS
-# ============================================================================
 
 def export_results(results_df: pd.DataFrame,
                   sensitivity_df: pd.DataFrame,
