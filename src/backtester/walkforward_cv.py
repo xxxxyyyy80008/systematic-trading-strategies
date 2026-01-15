@@ -1,10 +1,3 @@
-"""
-Global Walk-Forward Analysis
-------------------------------------------------------------------
-Optimizes a single set of parameters across all training windows (Cross-Validation)
-and tests the robustness of these static parameters on Out-of-Sample data.
-"""
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,36 +16,28 @@ from scipy import stats
 
 warnings.filterwarnings('ignore')
 
-# Assumed internal modules (Mocking logic handled if missing)
 try:
     from .backtest_engine import BacktestEngine
     from .types_core import StrategyConfig, TradeConfig
 except ImportError:
-    pass 
-
-# ============================================================================
-# 1. MATH & STATS HELPERS
-# ============================================================================
+    pass
 
 def set_random_seed(seed: int = 2570):
     random.seed(seed)
     np.random.seed(seed)
 
 def calculate_cv(values: List[float]) -> float:
-    """Calculate coefficient of variation (Standard Deviation / Mean)."""
     if not values: return 0.0
     mean = np.mean(values)
     std = np.std(values, ddof=1)
     return std / abs(mean) if mean != 0 else np.inf
 
 def calculate_range_ratio(values: List[float]) -> float:
-    """Calculate parameter range relative to median."""
     if not values: return 0.0
     median = np.median(values)
     return (max(values) - min(values)) / abs(median) if median != 0 else np.inf
 
 def classify_stability(cv: float, range_ratio: float) -> str:
-    """Classify parameter stability based on CV and Range."""
     if cv < 0.10 and range_ratio < 0.30:
         return "Excellent"
     elif cv < 0.15 and range_ratio < 0.60:
@@ -82,10 +67,6 @@ def create_wf_config(training_days: int = 252,
         'timeout': timeout,
         'random_seed': random_seed
     }
-
-# ============================================================================
-# 2. DATA & WINDOW MANAGEMENT
-# ============================================================================
 
 def filter_data_by_date(data_dict: Dict[str, pd.DataFrame],
                         start_date: datetime,
@@ -142,10 +123,6 @@ def generate_windows(start_date: datetime,
         current_start = test_start
     return windows
 
-# ============================================================================
-# 3. METRICS CALCULATION
-# ============================================================================
-
 def calculate_trade_metrics(trades_df: pd.DataFrame) -> Dict:
     empty_metrics = {
         'total_trades': 0, 'winning_trades': 0, 'losing_trades': 0,
@@ -154,7 +131,6 @@ def calculate_trade_metrics(trades_df: pd.DataFrame) -> Dict:
     }
     if trades_df is None or trades_df.empty: return empty_metrics
     
-    # Logic to find PnL column
     pnl_col = next((col for col in ['net_pnl', 'pnl', 'profit', 'return', 'profit_loss'] if col in trades_df.columns), None)
     if pnl_col is None: return {**empty_metrics, 'total_trades': len(trades_df)}
 
@@ -192,7 +168,6 @@ def calculate_returns_metrics(daily_values: pd.DataFrame, initial_capital: float
     values = daily_values['total_value'].values
     if len(values) < 2: return empty_metrics
     
-    # Calculate returns safely
     denom = values[:-1]
     returns = np.divide(np.diff(values), denom, out=np.zeros_like(denom), where=denom!=0)
     
@@ -201,7 +176,6 @@ def calculate_returns_metrics(daily_values: pd.DataFrame, initial_capital: float
     std_return = np.std(returns, ddof=1) if len(returns) > 1 else 0.0
     sharpe_ratio = (avg_return / std_return * np.sqrt(252)) if std_return > 0 else 0.0
     
-    # Drawdown
     cumulative = np.maximum.accumulate(values)
     drawdown = (values - cumulative) / cumulative
     max_drawdown = abs(np.min(drawdown)) * 100
@@ -234,33 +208,15 @@ def run_backtest(data_dict: Dict[str, pd.DataFrame],
         return {'error': str(e), 'total_trades': 0, 'win_rate': 0.0, 'sharpe_ratio': 0.0}
 
 def calculate_degradation(train_val: float, test_val: float) -> float:
-    """
-    Calculates Percentage Degradation (Overfitting).
-    Formula: (InSample - OutSample) / InSample
-    
-    Interpretation:
-    - 0.0 to 0.20: Excellent Robustness (Little drop)
-    - > 0.50:      High Overfitting (Performance halved)
-    - < 0.0:       Underfitting or Regime Shift (Test was better than Train)
-    """
     if train_val == 0.0:
         return 0.0
     
-    # Standard Degradation Formula
     degradation = (train_val - test_val) / train_val
     
-    # Edge Case Correction:
-    # If Train was negative (loss) and Test was worse (bigger loss), 
-    # the standard formula gives a negative number (looks like improvement).
-    # We fix this by ensuring degradation is positive if things got worse.
     if train_val < 0 and test_val < train_val:
         return abs(degradation)
         
     return degradation
-
-# ============================================================================
-# 4. OPTIMIZATION CORE (METHOD 2)
-# ============================================================================
 
 def calculate_objective(win_rate: float,
                        sharpe_ratio: float,
@@ -268,10 +224,6 @@ def calculate_objective(win_rate: float,
                        sharpe_weight: float = 0.65) -> float:
     normalized_sharpe = max(0, min(1, (sharpe_ratio + 3) / 6))
     return win_rate_weight * win_rate + sharpe_weight * normalized_sharpe
-
-# ============================================================================
-# 4. OPTIMIZATION CORE (METHOD 2) - REVISED FOR REPRODUCIBILITY
-# ============================================================================
 
 def create_global_objective_function(windows: List[Dict],
                                      data_dict: Dict[str, pd.DataFrame],
@@ -283,8 +235,6 @@ def create_global_objective_function(windows: List[Dict],
                                      objective_weights: Tuple[float, float]) -> Callable:
     
     def objective(trial: optuna.Trial) -> float:
-        # 1. Suggest Parameters (DETERMINISTIC ORDER REQUIRED)
-        # We sort keys to ensure trial.suggest_* is called in the exact same order every time.
         params = {}
         for param_name in sorted(param_space.keys()):
             param_type, *args = param_space[param_name]
@@ -300,29 +250,23 @@ def create_global_objective_function(windows: List[Dict],
         total_trades_all_windows = 0
         max_drawdowns = []
         
-        # 2. Cross-Validation Loop
         for i, window in enumerate(windows):
             train_data = filter_data_by_date(data_dict, window['train_start'], window['train_end'])
             
-            # Skip empty windows safely
             if not train_data: continue
             
             results = run_backtest(train_data, params, strategy_class, strategy_name, trade_config)
             
-            # CRASH PENALTY
             if 'error' in results:
                 window_scores.append(-10.0) 
                 continue
             
-            # A. Get Base Metrics
             sharpe = results.get('sharpe_ratio', 0)
             win_rate = results.get('win_rate', 0)
-            max_dd = results.get('max_drawdown', 100.0) / 100.0 # Convert 20% to 0.2
+            max_dd = results.get('max_drawdown', 100.0) / 100.0
             
-            # B. Penalize Volatility (Deflated Score)
             risk_adjusted_score = (sharpe * objective_weights[1] + win_rate * objective_weights[0]) / (1 + (max_dd * 2))
             
-            # C. Hard Drawdown Cap
             if max_dd > 0.25:
                 risk_adjusted_score -= 1.0 
 
@@ -330,26 +274,22 @@ def create_global_objective_function(windows: List[Dict],
             max_drawdowns.append(max_dd)
             total_trades_all_windows += results.get('total_trades', 0)
 
-            # Pruning
             current_conservative_score = np.mean(window_scores) - (0.5 * np.std(window_scores))
             trial.report(current_conservative_score, i)
             if trial.should_prune():
                 raise optuna.TrialPruned()
 
-        # 3. Final Aggregation
         if not window_scores: return -999.0
             
         mean_score = np.mean(window_scores)
         std_score = np.std(window_scores)
         min_score = np.min(window_scores)
         
-        # Robust Score Calculation
         robust_score = (0.7 * (mean_score - 0.5 * std_score)) + (0.3 * min_score)
         
         if total_trades_all_windows < (min_trades * len(window_scores) * 0.5):
             return -999.0
 
-        # Store attributes
         trial.set_user_attr('avg_score', mean_score)
         trial.set_user_attr('robust_score', robust_score)
         trial.set_user_attr('worst_window_score', min_score)
@@ -370,7 +310,6 @@ def optimize_global_parameters(windows: List[Dict],
     
     print(f"\nRunning Global Optimization on {len(windows)} windows...")
     
-    # 1. Global Seed
     set_random_seed(wf_config['random_seed'])
     
     objective_fn = create_global_objective_function(
@@ -378,12 +317,10 @@ def optimize_global_parameters(windows: List[Dict],
         trade_config, wf_config['min_trades'], objective_weights
     )
     
-    # 2. Deterministic Pruner & Sampler
     pruner = MedianPruner(n_startup_trials=wf_config['n_startup_trials'], 
                           n_warmup_steps=3, 
                           interval_steps=1)
     
-    # Crucial: TPESampler must be explicitly seeded
     sampler = TPESampler(seed=wf_config['random_seed'])
 
     study = optuna.create_study(
@@ -393,9 +330,6 @@ def optimize_global_parameters(windows: List[Dict],
         study_name=f'{strategy_name}_global_cv'
     )
     
-    # 3. Enforce Single Job for Reproducibility
-    # Parallel jobs (n_jobs > 1) introduce race conditions in trial reporting,
-    # causing the TPE history to diverge between runs.
     n_jobs_safe = 1 
     if wf_config['n_jobs'] != 1:
         print("Warning: forcing n_jobs=1 to ensure strict reproducibility.")
@@ -412,13 +346,7 @@ def optimize_global_parameters(windows: List[Dict],
     print(study.best_params)
     return study.best_params, study
 
-
-# ============================================================================
-# 5. ANALYSIS & VISUALIZATION
-# ============================================================================
-
 def analyze_cluster_stability(study: optuna.Study, top_n: int = 20) -> pd.DataFrame:
-    """Checks if top trials converge on similar parameters (Cluster Stability)."""
     completed_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
     sorted_trials = sorted(completed_trials, key=lambda t: t.value, reverse=True)[:top_n]
     
@@ -430,13 +358,12 @@ def analyze_cluster_stability(study: optuna.Study, top_n: int = 20) -> pd.DataFr
     for param in param_names:
         values = [t.params[param] for t in sorted_trials]
         
-        if isinstance(values[0], str): continue # Skip categorical
+        if isinstance(values[0], str): continue
 
         mean = np.mean(values)
         cv = calculate_cv(values)
         range_ratio = calculate_range_ratio(values)
         
-        # Composite Stability Score
         cv_score = max(0, 100 * (1 - cv / 0.40))
         range_score = max(0, 100 * (1 - range_ratio / 1.00))
         stability_score = 0.6 * cv_score + 0.4 * range_score
@@ -451,22 +378,13 @@ def analyze_cluster_stability(study: optuna.Study, top_n: int = 20) -> pd.DataFr
         })
         
     return pd.DataFrame(results).sort_values('stability_score', ascending=False)
-# ============================================================================
-# 5. ANALYSIS & VISUALIZATION - REVISED FOR REPRODUCIBILITY
-# ============================================================================
 
 def calculate_param_importance(study: optuna.Study, random_seed: int = 42) -> pd.DataFrame:
-    """
-    Calculates parameter importance using Mean Decrease Impurity (MDI).
-    Reproducibility Fix: Passes random_state to the internal Random Forest.
-    """
     try:
-        # 1. Filter for completed trials
         valid_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
         if len(valid_trials) < 2: 
             return pd.DataFrame()
 
-        # 2. Identify parameters that actually vary
         param_values = {}
         for t in valid_trials:
             for p, v in t.params.items():
@@ -479,8 +397,6 @@ def calculate_param_importance(study: optuna.Study, random_seed: int = 42) -> pd
             print("Warning: No parameters varied significantly. Skipping importance.")
             return pd.DataFrame()
 
-        # 3. Calculate Importance with SEED
-        # The Random Forest used here must be seeded!
         evaluator = MeanDecreaseImpurityImportanceEvaluator(n_trees=64, max_depth=64, seed=random_seed)
         
         importance = optuna.importance.get_param_importances(
@@ -495,19 +411,8 @@ def calculate_param_importance(study: optuna.Study, random_seed: int = 42) -> pd
     except Exception as e:
         print(f"Param importance error: {e}")
         return pd.DataFrame()
-        
-        # 4. Format Output
-        df = pd.DataFrame(list(importance.items()), columns=['parameter', 'importance'])
-        return df.sort_values('importance', ascending=False)
-
-    except Exception as e:
-        print(f"Param importance error: {e}")
-        # Return empty DF so the script continues gracefully
-        return pd.DataFrame()
-
 
 def plot_parameter_heatmap(study: optuna.Study, param_x: str, param_y: str):
-    """Visualizes 2D Parameter Sensitivity."""
     try:
         trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
         if not trials: return
@@ -534,7 +439,6 @@ def plot_parameter_heatmap(study: optuna.Study, param_x: str, param_y: str):
         print(f"Could not plot heatmap: {e}")
 
 def plot_drawdown_sensitivity(study: optuna.Study, param_name: str):
-    """Plots Parameter Value vs. Max Drawdown."""
     try:
         trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
         param_values, drawdowns = [], []
@@ -543,7 +447,7 @@ def plot_drawdown_sensitivity(study: optuna.Study, param_name: str):
             if param_name in t.params and 'max_drawdown' in t.user_attrs:
                 param_values.append(t.params[param_name])
                 dd = t.user_attrs['max_drawdown']
-                drawdowns.append(dd) # Assuming already percentage
+                drawdowns.append(dd)
 
         if not param_values: return
 
@@ -566,10 +470,6 @@ def plot_drawdown_sensitivity(study: optuna.Study, param_name: str):
     except Exception as e:
         print(f"Could not plot sensitivity: {e}")
 
-# ============================================================================
-# 6. EXPORT UTILITIES
-# ============================================================================
-
 def export_results(results_df: pd.DataFrame,
                    study: optuna.Study,
                    sensitivity_df: pd.DataFrame = None,
@@ -584,7 +484,6 @@ def export_results(results_df: pd.DataFrame,
     if sensitivity_df is not None and not sensitivity_df.empty:
         sensitivity_df.to_csv(os.path.join(output_dir, "global_param_importance.csv"), index=False)
     
-    # Export History
     try:
         history_data = []
         for trial in study.trials:
@@ -596,10 +495,6 @@ def export_results(results_df: pd.DataFrame,
         print(f"Results saved to {output_dir}")
     except Exception as e:
         print(f"Export error: {e}")
-
-# ============================================================================
-# 7. MAIN CONTROLLER
-# ============================================================================
 
 def walk_forward_analysis(data_dict: Dict[str, pd.DataFrame],
                          param_space: Dict[str, Tuple],
@@ -617,28 +512,21 @@ def walk_forward_analysis(data_dict: Dict[str, pd.DataFrame],
     if verbose:
         print(f"Global Walk-Forward: {len(windows)} windows from {start_date.date()} to {end_date.date()}")
 
-    # 1. GLOBAL OPTIMIZATION
     best_params, study = optimize_global_parameters(
         windows, data_dict, param_space, strategy_class, strategy_name,
         trade_config, wf_config, objective_weights
     )
     
-    # 2. OOS TESTING & DEGRADATION ANALYSIS
     results = []
     for i, window in enumerate(windows, 1):
-        # A. Filter Data
         train_data = filter_data_by_date(data_dict, window['train_start'], window['train_end'])
         test_data = filter_data_by_date(data_dict, window['test_start'], window['test_end'])
         holdout_data = filter_data_by_date(data_dict, window['holdout_start'], window['holdout_end'])
         
-        # B. Run Backtests
-        # Note: We re-run Train here to get exact metrics for this specific window
-        # (The optimizer gave us an average, but we want exact window-by-window comparison)
         train_res = run_backtest(train_data, best_params, strategy_class, strategy_name, trade_config)
         test_res = run_backtest(test_data, best_params, strategy_class, strategy_name, trade_config)
         holdout_res = run_backtest(holdout_data, best_params, strategy_class, strategy_name, trade_config)
         
-        # C. Calculate Degradation (The new part)
         deg_sharpe = calculate_degradation(train_res.get('sharpe_ratio', 0), test_res.get('sharpe_ratio', 0))
         deg_return = calculate_degradation(train_res.get('total_return', 0), test_res.get('total_return', 0))
         
@@ -647,13 +535,11 @@ def walk_forward_analysis(data_dict: Dict[str, pd.DataFrame],
             'test_start': window['test_start'],
             'global_score': study.best_value,
             
-            # Metrics
             **{f'best_{k}': v for k, v in best_params.items()},
             **{f'train_{k}': v for k, v in train_res.items() if k != 'error'},
             **{f'test_{k}': v for k, v in test_res.items() if k != 'error'},
             **{f'holdout_{k}': v for k, v in holdout_res.items() if k != 'error'},
             
-            # Degradation Metrics
             'degradation_sharpe': deg_sharpe,
             'degradation_return': deg_return
         }
@@ -661,7 +547,6 @@ def walk_forward_analysis(data_dict: Dict[str, pd.DataFrame],
 
     results_df = pd.DataFrame(results)
 
-    # D. Summary Print
     if verbose and not results_df.empty:
         avg_deg_sharpe = results_df['degradation_sharpe'].mean()
         print("\n--- Degradation Analysis ---")
@@ -682,33 +567,27 @@ def run_walkforward(data_dict: Dict[str, pd.DataFrame],
     
     if wf_config is None: wf_config = create_wf_config()
     
-    # A. Execute Main Logic
     results_df, global_study = walk_forward_analysis(
         data_dict, param_space, strategy_class, strategy_name, 
         trade_config, wf_config, objective_weights, verbose
     )
     
-    # B. Stability Analysis (Cluster Method)
     stability_df = analyze_cluster_stability(global_study, top_n=20)
     if verbose:
         print("\n--- Parameter Stability (Cluster Analysis) ---")
         if not stability_df.empty:
             print(stability_df[['parameter', 'cv', 'range_ratio', 'assessment']].to_string())
 
-    # C. Importance Analysis (Passed Seed)
     sensitivity_df = calculate_param_importance(global_study, random_seed=wf_config.get('random_seed', 42))
     if verbose and not sensitivity_df.empty:
         print("\n--- Parameter Importance ---")
         print(sensitivity_df.head(5).to_string())
 
-    # D. Visualization
     if not sensitivity_df.empty:
         top_params = sensitivity_df['parameter'].head(2).tolist()
         if len(top_params) == 2:
             plot_parameter_heatmap(global_study, top_params[0], top_params[1])
             
-    # E. Export
     export_results(results_df, global_study, sensitivity_df, output_dir="wf_method2_results")
     
     return results_df, sensitivity_df
-
