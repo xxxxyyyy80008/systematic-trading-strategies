@@ -588,6 +588,6 @@ def run_walkforward(data_dict: Dict[str, pd.DataFrame],
         if len(top_params) == 2:
             plot_parameter_heatmap(global_study, top_params[0], top_params[1])
             
-    export_results(results_df, global_study, sensitivity_df, output_dir="wf_method2_results")
+    export_results(results_df, global_study, sensitivity_df, output_dir="wf_results")
     
     return results_df, sensitivity_df
